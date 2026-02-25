@@ -49,4 +49,3 @@ def get_gptmail_api_key() -> str:
     """获取 GPTMail API Key（优先从数据库读取）"""
     api_key = get_setting("gptmail_api_key")
     return api_key if api_key else config.get_gptmail_api_key_default()
-

@@ -10,4 +10,3 @@ def get_response_details(response: requests.Response) -> Any:
         return response.json()
     except Exception:
         return response.text or response.reason
-

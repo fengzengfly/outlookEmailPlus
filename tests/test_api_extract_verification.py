@@ -14,7 +14,7 @@ import os
 import time
 
 # 添加项目根目录到 Python 路径
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 
 class TestExtractVerificationAPI(unittest.TestCase):
@@ -233,5 +233,5 @@ class TestExtractVerificationAPI(unittest.TestCase):
         self.assertTrue(True, "待实现：轮询次数参数验证")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

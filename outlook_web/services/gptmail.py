@@ -31,7 +31,7 @@ def gptmail_request(
                 "success": False,
                 "error": "GPTMail API Key 未配置",
                 "error_type": "CONFIG_ERROR",
-                "details": "请在系统设置中配置 GPTMail API Key"
+                "details": "请在系统设置中配置 GPTMail API Key",
             }
 
         headers = {
@@ -51,7 +51,7 @@ def gptmail_request(
                 "success": False,
                 "error": f"不支持的请求方法: {method}",
                 "error_type": "METHOD_ERROR",
-                "details": "仅支持 GET、POST、DELETE 方法"
+                "details": "仅支持 GET、POST、DELETE 方法",
             }
 
         # 处理响应
@@ -62,35 +62,35 @@ def gptmail_request(
                 "success": False,
                 "error": "API Key 无效或已过期",
                 "error_type": "AUTH_ERROR",
-                "details": f"HTTP {response.status_code}: 请检查 API Key 是否正确"
+                "details": f"HTTP {response.status_code}: 请检查 API Key 是否正确",
             }
         elif response.status_code == 403:
             return {
                 "success": False,
                 "error": "API 访问被拒绝",
                 "error_type": "PERMISSION_ERROR",
-                "details": f"HTTP {response.status_code}: 请检查 API Key 权限"
+                "details": f"HTTP {response.status_code}: 请检查 API Key 权限",
             }
         elif response.status_code == 429:
             return {
                 "success": False,
                 "error": "API 请求频率超限",
                 "error_type": "RATE_LIMIT_ERROR",
-                "details": f"HTTP {response.status_code}: 请稍后重试"
+                "details": f"HTTP {response.status_code}: 请稍后重试",
             }
         elif response.status_code >= 500:
             return {
                 "success": False,
                 "error": "GPTMail 服务暂时不可用",
                 "error_type": "SERVER_ERROR",
-                "details": f"HTTP {response.status_code}: 服务器错误，请稍后重试"
+                "details": f"HTTP {response.status_code}: 服务器错误，请稍后重试",
             }
         else:
             return {
                 "success": False,
                 "error": f"API 请求失败",
                 "error_type": "HTTP_ERROR",
-                "details": f"HTTP {response.status_code}: {response.text[:200]}"
+                "details": f"HTTP {response.status_code}: {response.text[:200]}",
             }
 
     except requests.exceptions.Timeout:
@@ -98,32 +98,34 @@ def gptmail_request(
             "success": False,
             "error": "API 请求超时",
             "error_type": "TIMEOUT_ERROR",
-            "details": "请求超过 30 秒未响应，请检查网络连接或稍后重试"
+            "details": "请求超过 30 秒未响应，请检查网络连接或稍后重试",
         }
     except requests.exceptions.ConnectionError as e:
         return {
             "success": False,
             "error": "无法连接到 GPTMail 服务",
             "error_type": "CONNECTION_ERROR",
-            "details": f"网络连接失败: {str(e)[:200]}"
+            "details": f"网络连接失败: {str(e)[:200]}",
         }
     except requests.exceptions.RequestException as e:
         return {
             "success": False,
             "error": "网络请求异常",
             "error_type": "REQUEST_ERROR",
-            "details": f"请求失败: {str(e)[:200]}"
+            "details": f"请求失败: {str(e)[:200]}",
         }
     except Exception as e:
         return {
             "success": False,
             "error": "未知错误",
             "error_type": "UNKNOWN_ERROR",
-            "details": f"异常: {str(e)[:200]}"
+            "details": f"异常: {str(e)[:200]}",
         }
 
 
-def generate_temp_email(prefix: str = None, domain: str = None) -> Tuple[Optional[str], Optional[str]]:
+def generate_temp_email(
+    prefix: str = None, domain: str = None
+) -> Tuple[Optional[str], Optional[str]]:
     """
     生成临时邮箱地址
 
@@ -190,5 +192,7 @@ def delete_temp_email_from_api(message_id: str) -> bool:
 
 def clear_temp_emails_from_api(email_addr: str) -> bool:
     """清空 GPTMail 邮箱的所有邮件"""
-    result = gptmail_request("DELETE", "/api/emails/clear", params={"email": email_addr})
+    result = gptmail_request(
+        "DELETE", "/api/emails/clear", params={"email": email_addr}
+    )
     return bool(result and result.get("success", False))

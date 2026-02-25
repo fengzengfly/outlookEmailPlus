@@ -6,6 +6,7 @@
 - 处理未捕获的异常
 - 返回统一错误结构
 """
+
 from __future__ import annotations
 
 from flask import g, jsonify, request
@@ -30,7 +31,7 @@ def handle_http_exception(error: HTTPException):
 
     trace_id_value = None
     try:
-        trace_id_value = getattr(g, 'trace_id', None)
+        trace_id_value = getattr(g, "trace_id", None)
     except Exception:
         trace_id_value = None
 
@@ -40,11 +41,11 @@ def handle_http_exception(error: HTTPException):
         err_type="HttpError",
         status=status_code,
         details=str(error),
-        trace_id=trace_id_value
+        trace_id=trace_id_value,
     )
 
-    if request.path.startswith('/api/') or request.is_json:
-        return jsonify({'success': False, 'error': error_payload}), status_code
+    if request.path.startswith("/api/") or request.is_json:
+        return jsonify({"success": False, "error": error_payload}), status_code
 
     return f"{message} (trace_id={error_payload.get('trace_id')})", status_code
 
@@ -53,13 +54,16 @@ def handle_exception(error):
     """处理未捕获的异常"""
     trace_id_value = None
     try:
-        trace_id_value = getattr(g, 'trace_id', None)
+        trace_id_value = getattr(g, "trace_id", None)
     except Exception:
         trace_id_value = None
 
     try:
         from flask import current_app
-        current_app.logger.exception("Unhandled exception trace_id=%s", trace_id_value or "unknown")
+
+        current_app.logger.exception(
+            "Unhandled exception trace_id=%s", trace_id_value or "unknown"
+        )
     except Exception:
         pass
 
@@ -69,10 +73,10 @@ def handle_exception(error):
         err_type="UnhandledException",
         status=500,
         details=str(error),
-        trace_id=trace_id_value
+        trace_id=trace_id_value,
     )
 
-    if request.path.startswith('/api/') or request.is_json:
-        return jsonify({'success': False, 'error': error_payload}), 500
+    if request.path.startswith("/api/") or request.is_json:
+        return jsonify({"success": False, "error": error_payload}), 500
 
     return f"服务器内部错误 (trace_id={error_payload.get('trace_id')})", 500

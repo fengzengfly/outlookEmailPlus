@@ -29,7 +29,9 @@ def decode_header_value(header_value: str) -> str:
         for part, charset in decoded_parts:
             if isinstance(part, bytes):
                 try:
-                    decoded_string += part.decode(charset if charset else "utf-8", "replace")
+                    decoded_string += part.decode(
+                        charset if charset else "utf-8", "replace"
+                    )
                 except (LookupError, UnicodeDecodeError):
                     decoded_string += part.decode("utf-8", "replace")
             else:
@@ -55,7 +57,11 @@ def get_email_body(msg) -> str:
                     break
                 except Exception:
                     continue
-            elif content_type == "text/html" and "attachment" not in content_disposition and not body:
+            elif (
+                content_type == "text/html"
+                and "attachment" not in content_disposition
+                and not body
+            ):
                 try:
                     payload = part.get_payload(decode=True)
                     charset = part.get_content_charset() or "utf-8"
@@ -145,7 +151,9 @@ def get_emails_imap(
     top: int = 20,
 ) -> Dict[str, Any]:
     """使用 IMAP 获取邮件列表（支持分页和文件夹选择）- 默认使用新版服务器"""
-    return get_emails_imap_with_server(account, client_id, refresh_token, folder, skip, top, IMAP_SERVER_NEW)
+    return get_emails_imap_with_server(
+        account, client_id, refresh_token, folder, skip, top, IMAP_SERVER_NEW
+    )
 
 
 def get_emails_imap_with_server(
@@ -173,8 +181,20 @@ def get_emails_imap_with_server(
         folder_map = {
             "inbox": ['"INBOX"', "INBOX"],
             "junkemail": ['"Junk"', '"Junk Email"', "Junk", '"垃圾邮件"'],
-            "deleteditems": ['"Deleted"', '"Deleted Items"', '"Trash"', "Deleted", '"已删除邮件"'],
-            "trash": ['"Deleted"', '"Deleted Items"', '"Trash"', "Deleted", '"已删除邮件"'],
+            "deleteditems": [
+                '"Deleted"',
+                '"Deleted Items"',
+                '"Trash"',
+                "Deleted",
+                '"已删除邮件"',
+            ],
+            "trash": [
+                '"Deleted"',
+                '"Deleted Items"',
+                '"Trash"',
+                "Deleted",
+                '"已删除邮件"',
+            ],
         }
         possible_folders = folder_map.get((folder or "").lower(), ['"INBOX"'])
 
@@ -198,7 +218,9 @@ def get_emails_imap_with_server(
                 if status == "OK" and folder_list:
                     for folder_item in folder_list:
                         if isinstance(folder_item, bytes):
-                            available_folders.append(folder_item.decode("utf-8", errors="ignore"))
+                            available_folders.append(
+                                folder_item.decode("utf-8", errors="ignore")
+                            )
                         else:
                             available_folders.append(str(folder_item))
 
@@ -208,7 +230,10 @@ def get_emails_imap_with_server(
                     "available_folders": available_folders[:10],
                 }
             except Exception:
-                error_details = {"last_error": last_error, "tried_folders": possible_folders}
+                error_details = {
+                    "last_error": last_error,
+                    "tried_folders": possible_folders,
+                }
 
             return {
                 "success": False,
@@ -257,11 +282,21 @@ def get_emails_imap_with_server(
                     body_preview = get_email_body(msg)
                     emails_data.append(
                         {
-                            "id": msg_id.decode() if isinstance(msg_id, bytes) else str(msg_id),
-                            "subject": decode_header_value(msg.get("Subject", "无主题")),
+                            "id": (
+                                msg_id.decode()
+                                if isinstance(msg_id, bytes)
+                                else str(msg_id)
+                            ),
+                            "subject": decode_header_value(
+                                msg.get("Subject", "无主题")
+                            ),
                             "from": decode_header_value(msg.get("From", "未知发件人")),
                             "date": msg.get("Date", "未知时间"),
-                            "body_preview": body_preview[:200] + "..." if len(body_preview) > 200 else body_preview,
+                            "body_preview": (
+                                body_preview[:200] + "..."
+                                if len(body_preview) > 200
+                                else body_preview
+                            ),
                         }
                     )
             except Exception:
@@ -308,8 +343,20 @@ def get_email_detail_imap(
         folder_map = {
             "inbox": ['"INBOX"', "INBOX"],
             "junkemail": ['"Junk"', '"Junk Email"', "Junk", '"垃圾邮件"'],
-            "deleteditems": ['"Deleted"', '"Deleted Items"', '"Trash"', "Deleted", '"已删除邮件"'],
-            "trash": ['"Deleted"', '"Deleted Items"', '"Trash"', "Deleted", '"已删除邮件"'],
+            "deleteditems": [
+                '"Deleted"',
+                '"Deleted Items"',
+                '"Trash"',
+                "Deleted",
+                '"已删除邮件"',
+            ],
+            "trash": [
+                '"Deleted"',
+                '"Deleted Items"',
+                '"Trash"',
+                "Deleted",
+                '"已删除邮件"',
+            ],
         }
         possible_folders = folder_map.get((folder or "").lower(), ['"INBOX"'])
 

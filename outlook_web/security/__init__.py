@@ -15,4 +15,3 @@ __all__ = [
     "is_password_hashed",
     "verify_password",
 ]
-

@@ -32,7 +32,7 @@ def utcnow() -> datetime:
 
 def healthz() -> Any:
     """基础健康检查（用于容器/反代探活）"""
-    return jsonify({'status': 'ok'}), 200
+    return jsonify({"status": "ok"}), 200
 
 
 @login_required
@@ -48,58 +48,74 @@ def api_system_health() -> Any:
             db_ok = False
 
         # Scheduler 心跳
-        heartbeat_row = conn.execute('''
+        heartbeat_row = conn.execute(
+            """
             SELECT updated_at
             FROM settings
             WHERE key = 'scheduler_heartbeat'
-        ''').fetchone()
+        """
+        ).fetchone()
 
         heartbeat_age_seconds = None
-        if heartbeat_row and heartbeat_row['updated_at']:
+        if heartbeat_row and heartbeat_row["updated_at"]:
             try:
-                hb_time = datetime.fromisoformat(heartbeat_row['updated_at'])
+                hb_time = datetime.fromisoformat(heartbeat_row["updated_at"])
                 heartbeat_age_seconds = int((utcnow() - hb_time).total_seconds())
             except Exception:
                 heartbeat_age_seconds = None
 
-        scheduler_enabled = settings_repo.get_setting('enable_scheduled_refresh', 'true').lower() == 'true'
+        scheduler_enabled = (
+            settings_repo.get_setting("enable_scheduled_refresh", "true").lower()
+            == "true"
+        )
         scheduler_autostart = config.get_scheduler_autostart_default()
-        scheduler_healthy = (heartbeat_age_seconds is not None) and (heartbeat_age_seconds <= 120)
+        scheduler_healthy = (heartbeat_age_seconds is not None) and (
+            heartbeat_age_seconds <= 120
+        )
 
         # 刷新锁/运行中
-        lock_row = conn.execute('''
+        lock_row = conn.execute(
+            """
             SELECT owner_id, expires_at
             FROM distributed_locks
             WHERE name = ?
-        ''', (REFRESH_LOCK_NAME,)).fetchone()
-        locked = bool(lock_row and lock_row['expires_at'] and lock_row['expires_at'] > time.time())
+        """,
+            (REFRESH_LOCK_NAME,),
+        ).fetchone()
+        locked = bool(
+            lock_row and lock_row["expires_at"] and lock_row["expires_at"] > time.time()
+        )
 
-        running_run = conn.execute('''
+        running_run = conn.execute(
+            """
             SELECT id, trigger_source, started_at, trace_id
             FROM refresh_runs
             WHERE status = 'running'
             ORDER BY started_at DESC
             LIMIT 1
-        ''').fetchone()
+        """
+        ).fetchone()
 
-        return jsonify({
-            'success': True,
-            'health': {
-                'service': 'ok',
-                'database': 'ok' if db_ok else 'error',
-                'scheduler': {
-                    'enabled': scheduler_enabled,
-                    'autostart': scheduler_autostart,
-                    'heartbeat_age_seconds': heartbeat_age_seconds,
-                    'healthy': scheduler_healthy if scheduler_enabled else True
+        return jsonify(
+            {
+                "success": True,
+                "health": {
+                    "service": "ok",
+                    "database": "ok" if db_ok else "error",
+                    "scheduler": {
+                        "enabled": scheduler_enabled,
+                        "autostart": scheduler_autostart,
+                        "heartbeat_age_seconds": heartbeat_age_seconds,
+                        "healthy": scheduler_healthy if scheduler_enabled else True,
+                    },
+                    "refresh": {
+                        "locked": locked,
+                        "running": dict(running_run) if running_run else None,
+                    },
+                    "server_time_utc": utcnow().isoformat() + "Z",
                 },
-                'refresh': {
-                    'locked': locked,
-                    'running': dict(running_run) if running_run else None
-                },
-                'server_time_utc': utcnow().isoformat() + 'Z'
             }
-        })
+        )
     finally:
         conn.close()
 
@@ -111,77 +127,95 @@ def api_system_diagnostics() -> Any:
     try:
         now_ts = time.time()
 
-        export_tokens_count = conn.execute('''
+        export_tokens_count = conn.execute(
+            """
             SELECT COUNT(*) as c
             FROM export_verify_tokens
             WHERE expires_at > ?
-        ''', (now_ts,)).fetchone()['c']
+        """,
+            (now_ts,),
+        ).fetchone()["c"]
 
-        locked_ip_count = conn.execute('''
+        locked_ip_count = conn.execute(
+            """
             SELECT COUNT(*) as c
             FROM login_attempts
             WHERE locked_until_at IS NOT NULL AND locked_until_at > ?
-        ''', (now_ts,)).fetchone()['c']
+        """,
+            (now_ts,),
+        ).fetchone()["c"]
 
-        running_runs = conn.execute('''
+        running_runs = conn.execute(
+            """
             SELECT id, trigger_source, started_at, trace_id
             FROM refresh_runs
             WHERE status = 'running'
             ORDER BY started_at DESC
             LIMIT 5
-        ''').fetchall()
+        """
+        ).fetchall()
 
-        last_runs = conn.execute('''
+        last_runs = conn.execute(
+            """
             SELECT id, trigger_source, status, started_at, finished_at, total, success_count, failed_count, trace_id
             FROM refresh_runs
             ORDER BY started_at DESC
             LIMIT 10
-        ''').fetchall()
+        """
+        ).fetchall()
 
-        locks = conn.execute('''
+        locks = conn.execute(
+            """
             SELECT name, owner_id, acquired_at, expires_at
             FROM distributed_locks
             ORDER BY name ASC
-        ''').fetchall()
+        """
+        ).fetchall()
 
         # 数据库升级状态（可验证）
         schema_version_row = conn.execute(
             "SELECT value, updated_at FROM settings WHERE key = ?",
-            (DB_SCHEMA_VERSION_KEY,)
+            (DB_SCHEMA_VERSION_KEY,),
         ).fetchone()
         try:
-            schema_version = int(schema_version_row['value']) if schema_version_row else 0
+            schema_version = (
+                int(schema_version_row["value"]) if schema_version_row else 0
+            )
         except Exception:
             schema_version = 0
 
         last_migration = None
         try:
-            mig = conn.execute('''
+            mig = conn.execute(
+                """
                 SELECT id, from_version, to_version, status, started_at, finished_at, error, trace_id
                 FROM schema_migrations
                 ORDER BY started_at DESC
                 LIMIT 1
-            ''').fetchone()
+            """
+            ).fetchone()
             last_migration = dict(mig) if mig else None
         except Exception:
             last_migration = None
 
-        return jsonify({
-            'success': True,
-            'diagnostics': {
-                'export_verify_tokens_active': export_tokens_count,
-                'login_locked_ip_count': locked_ip_count,
-                'running_runs': [dict(r) for r in running_runs],
-                'last_runs': [dict(r) for r in last_runs],
-                'locks': [dict(r) for r in locks],
-                'schema': {
-                    'version': schema_version,
-                    'target_version': DB_SCHEMA_VERSION,
-                    'up_to_date': schema_version >= DB_SCHEMA_VERSION,
-                    'last_migration': last_migration
-                }
+        return jsonify(
+            {
+                "success": True,
+                "diagnostics": {
+                    "export_verify_tokens_active": export_tokens_count,
+                    "login_locked_ip_count": locked_ip_count,
+                    "running_runs": [dict(r) for r in running_runs],
+                    "last_runs": [dict(r) for r in last_runs],
+                    "locks": [dict(r) for r in locks],
+                    "schema": {
+                        "version": schema_version,
+                        "target_version": DB_SCHEMA_VERSION,
+                        "up_to_date": schema_version >= DB_SCHEMA_VERSION,
+                        "last_migration": last_migration,
+                    },
+                },
             }
-        })
+        )
     finally:
         conn.close()
 
@@ -195,30 +229,34 @@ def api_system_upgrade_status() -> Any:
     try:
         row = conn.execute(
             "SELECT value, updated_at FROM settings WHERE key = ?",
-            (DB_SCHEMA_VERSION_KEY,)
+            (DB_SCHEMA_VERSION_KEY,),
         ).fetchone()
         try:
-            schema_version = int(row['value']) if row and row['value'] is not None else 0
+            schema_version = (
+                int(row["value"]) if row and row["value"] is not None else 0
+            )
         except Exception:
             schema_version = 0
 
         last_trace_row = conn.execute(
             "SELECT value FROM settings WHERE key = ?",
-            (DB_SCHEMA_LAST_UPGRADE_TRACE_ID_KEY,)
+            (DB_SCHEMA_LAST_UPGRADE_TRACE_ID_KEY,),
         ).fetchone()
         last_error_row = conn.execute(
             "SELECT value FROM settings WHERE key = ?",
-            (DB_SCHEMA_LAST_UPGRADE_ERROR_KEY,)
+            (DB_SCHEMA_LAST_UPGRADE_ERROR_KEY,),
         ).fetchone()
 
         last_migration = None
         try:
-            mig = conn.execute('''
+            mig = conn.execute(
+                """
                 SELECT id, from_version, to_version, status, started_at, finished_at, error, trace_id
                 FROM schema_migrations
                 ORDER BY started_at DESC
                 LIMIT 1
-            ''').fetchone()
+            """
+            ).fetchone()
             last_migration = dict(mig) if mig else None
         except Exception:
             last_migration = None
@@ -226,21 +264,27 @@ def api_system_upgrade_status() -> Any:
         database_path = app_config.get_database_path()
         backup_hint = {
             "database_path": database_path,
-            "linux_example": f"cp \"{database_path}\" \"{database_path}.backup\"",
-            "windows_example": f"copy \"{database_path}\" \"{database_path}.backup\""
+            "linux_example": f'cp "{database_path}" "{database_path}.backup"',
+            "windows_example": f'copy "{database_path}" "{database_path}.backup"',
         }
 
-        return jsonify({
-            "success": True,
-            "upgrade": {
-                "schema_version": schema_version,
-                "target_version": DB_SCHEMA_VERSION,
-                "up_to_date": schema_version >= DB_SCHEMA_VERSION,
-                "last_upgrade_trace_id": (last_trace_row['value'] if last_trace_row else ""),
-                "last_upgrade_error": (last_error_row['value'] if last_error_row else ""),
-                "last_migration": last_migration,
-                "backup_hint": backup_hint
+        return jsonify(
+            {
+                "success": True,
+                "upgrade": {
+                    "schema_version": schema_version,
+                    "target_version": DB_SCHEMA_VERSION,
+                    "up_to_date": schema_version >= DB_SCHEMA_VERSION,
+                    "last_upgrade_trace_id": (
+                        last_trace_row["value"] if last_trace_row else ""
+                    ),
+                    "last_upgrade_error": (
+                        last_error_row["value"] if last_error_row else ""
+                    ),
+                    "last_migration": last_migration,
+                    "backup_hint": backup_hint,
+                },
             }
-        })
+        )
     finally:
         conn.close()

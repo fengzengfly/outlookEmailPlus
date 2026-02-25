@@ -21,7 +21,7 @@ from outlook_web.security.crypto import verify_password
 
 def login() -> Any:
     """登录页面"""
-    if request.method == 'POST':
+    if request.method == "POST":
         try:
             # 获取客户端 IP
             client_ip = get_client_ip()
@@ -31,7 +31,7 @@ def login() -> Any:
             if not allowed:
                 trace_id_value = None
                 try:
-                    trace_id_value = getattr(g, 'trace_id', None)
+                    trace_id_value = getattr(g, "trace_id", None)
                 except Exception:
                     trace_id_value = None
                 error_payload = build_error_payload(
@@ -40,12 +40,12 @@ def login() -> Any:
                     err_type="RateLimitError",
                     status=429,
                     details=f"ip={client_ip}",
-                    trace_id=trace_id_value
+                    trace_id=trace_id_value,
                 )
-                return jsonify({'success': False, 'error': error_payload}), 429
+                return jsonify({"success": False, "error": error_payload}), 429
 
             data = request.json if request.is_json else request.form
-            password = data.get('password', '')
+            password = data.get("password", "")
 
             # 从数据库获取密码哈希
             stored_password = settings_repo.get_login_password()
@@ -54,16 +54,16 @@ def login() -> Any:
             if verify_password(password, stored_password):
                 # 登录成功，重置失败记录
                 reset_login_attempts(client_ip)
-                session['logged_in'] = True
+                session["logged_in"] = True
                 session.permanent = True
                 session.modified = True  # 确保 Flask-Session 保存 session
-                return jsonify({'success': True, 'message': '登录成功'})
+                return jsonify({"success": True, "message": "登录成功"})
             else:
                 # 登录失败，记录失败次数
                 record_login_failure(client_ip)
                 trace_id_value = None
                 try:
-                    trace_id_value = getattr(g, 'trace_id', None)
+                    trace_id_value = getattr(g, "trace_id", None)
                 except Exception:
                     trace_id_value = None
                 error_payload = build_error_payload(
@@ -72,18 +72,21 @@ def login() -> Any:
                     err_type="AuthError",
                     status=401,
                     details=f"ip={client_ip}",
-                    trace_id=trace_id_value
+                    trace_id=trace_id_value,
                 )
-                return jsonify({'success': False, 'error': error_payload}), 401
+                return jsonify({"success": False, "error": error_payload}), 401
         except Exception as e:
             trace_id_value = None
             try:
-                trace_id_value = getattr(g, 'trace_id', None)
+                trace_id_value = getattr(g, "trace_id", None)
             except Exception:
                 trace_id_value = None
             from flask import current_app
+
             try:
-                current_app.logger.exception("Login error trace_id=%s", trace_id_value or "unknown")
+                current_app.logger.exception(
+                    "Login error trace_id=%s", trace_id_value or "unknown"
+                )
             except Exception:
                 pass
             error_payload = build_error_payload(
@@ -92,24 +95,24 @@ def login() -> Any:
                 err_type="AuthError",
                 status=500,
                 details=str(e),
-                trace_id=trace_id_value
+                trace_id=trace_id_value,
             )
-            return jsonify({'success': False, 'error': error_payload}), 500
+            return jsonify({"success": False, "error": error_payload}), 500
 
     # GET 请求返回登录页面
-    return render_template('login.html')
+    return render_template("login.html")
 
 
 def logout() -> Any:
     """退出登录"""
-    session.pop('logged_in', None)
-    return redirect(url_for('pages.login'))
+    session.pop("logged_in", None)
+    return redirect(url_for("pages.login"))
 
 
 @login_required
 def index() -> Any:
     """主页"""
-    return render_template('index.html')
+    return render_template("index.html")
 
 
 def get_csrf_token() -> Any:
@@ -118,6 +121,6 @@ def get_csrf_token() -> Any:
 
     if CSRF_AVAILABLE:
         token = generate_csrf()
-        return jsonify({'csrf_token': token})
+        return jsonify({"csrf_token": token})
     else:
-        return jsonify({'csrf_token': None, 'csrf_disabled': True})
+        return jsonify({"csrf_token": None, "csrf_disabled": True})

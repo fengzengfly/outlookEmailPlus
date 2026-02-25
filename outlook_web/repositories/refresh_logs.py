@@ -38,4 +38,3 @@ def log_refresh_result(
         return True
     except Exception:
         return False
-

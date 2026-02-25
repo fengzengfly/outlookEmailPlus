@@ -68,10 +68,15 @@ def acquire_distributed_lock(
         return False, {"error": str(e)}
 
 
-def release_distributed_lock(conn: sqlite3.Connection, name: str, owner_id: str) -> bool:
+def release_distributed_lock(
+    conn: sqlite3.Connection, name: str, owner_id: str
+) -> bool:
     try:
         conn.execute("BEGIN IMMEDIATE")
-        conn.execute("DELETE FROM distributed_locks WHERE name = ? AND owner_id = ?", (name, owner_id))
+        conn.execute(
+            "DELETE FROM distributed_locks WHERE name = ? AND owner_id = ?",
+            (name, owner_id),
+        )
         conn.commit()
         return True
     except Exception:
@@ -80,4 +85,3 @@ def release_distributed_lock(conn: sqlite3.Connection, name: str, owner_id: str)
         except Exception:
             pass
         return False
-

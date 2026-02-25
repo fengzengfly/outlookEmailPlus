@@ -23,7 +23,7 @@ PASSWORD = ""
 # OAuth2 refresh_token
 CLIENT_ID = ""
 # OAuth2 client_id
-REFRESH_TOKEN= ""
+REFRESH_TOKEN = ""
 # 代理地址（可选，格式: host:port 或 http://host:port）
 PROXY = None  # 例如: "127.0.0.1:7890"
 # ================================================
@@ -57,9 +57,11 @@ def decode_header_value(header_value: str) -> str:
         for part, charset in decoded_parts:
             if isinstance(part, bytes):
                 try:
-                    decoded_string += part.decode(charset if charset else 'utf-8', 'replace')
+                    decoded_string += part.decode(
+                        charset if charset else "utf-8", "replace"
+                    )
                 except (LookupError, UnicodeDecodeError):
-                    decoded_string += part.decode('utf-8', 'replace')
+                    decoded_string += part.decode("utf-8", "replace")
             else:
                 decoded_string += str(part)
         return decoded_string
@@ -101,7 +103,10 @@ def print_email_info(emails: List[Any], method_name: str):
 
 # ==================== 方式1: 旧版 IMAP 方式 ====================
 
-def get_access_token_old(account: str, client_id: str, refresh_token: str) -> Optional[str]:
+
+def get_access_token_old(
+    account: str, client_id: str, refresh_token: str
+) -> Optional[str]:
     """
     旧版方式获取 access_token
     使用 login.live.com 端点
@@ -110,9 +115,9 @@ def get_access_token_old(account: str, client_id: str, refresh_token: str) -> Op
 
     try:
         data = {
-            'client_id': client_id,
-            'grant_type': 'refresh_token',
-            'refresh_token': refresh_token
+            "client_id": client_id,
+            "grant_type": "refresh_token",
+            "refresh_token": refresh_token,
         }
 
         ret = requests.post(TOKEN_URL_LIVE, data=data, timeout=30)
@@ -124,7 +129,7 @@ def get_access_token_old(account: str, client_id: str, refresh_token: str) -> Op
                 print("  ⚠️ 账号被封禁!")
             return None
 
-        access_token = ret.json().get('access_token')
+        access_token = ret.json().get("access_token")
         if access_token:
             print(f"  ✅ 成功获取 access_token，长度: {len(access_token)}")
         return access_token
@@ -134,7 +139,9 @@ def get_access_token_old(account: str, client_id: str, refresh_token: str) -> Op
         return None
 
 
-def read_emails_imap_old(account: str, client_id: str, refresh_token: str, top: int = 10) -> Optional[List]:
+def read_emails_imap_old(
+    account: str, client_id: str, refresh_token: str, top: int = 10
+) -> Optional[List]:
     """
     方式1: 旧版 IMAP 方式读取邮件
     使用 outlook.office365.com 服务器
@@ -154,15 +161,15 @@ def read_emails_imap_old(account: str, client_id: str, refresh_token: str, top: 
 
         # 3. XOAUTH2 认证
         auth_string = f"user={account}\1auth=Bearer {access_token}\1\1"
-        connection.authenticate('XOAUTH2', lambda x: auth_string)
+        connection.authenticate("XOAUTH2", lambda x: auth_string)
         print("  ✅ IMAP 认证成功")
 
         # 4. 选择收件箱
         connection.select("INBOX")
 
         # 5. 搜索邮件
-        status, messages = connection.search(None, 'ALL')
-        if status != 'OK' or not messages or not messages[0]:
+        status, messages = connection.search(None, "ALL")
+        if status != "OK" or not messages or not messages[0]:
             print("  ⚠️ 收件箱为空")
             return []
 
@@ -175,8 +182,8 @@ def read_emails_imap_old(account: str, client_id: str, refresh_token: str, top: 
         emails = []
         for msg_id in recent_ids:
             try:
-                status, msg_data = connection.fetch(msg_id, '(RFC822)')
-                if status == 'OK' and msg_data and msg_data[0]:
+                status, msg_data = connection.fetch(msg_id, "(RFC822)")
+                if status == "OK" and msg_data and msg_data[0]:
                     raw_email = msg_data[0][1]
                     msg = email.message_from_bytes(raw_email)
                     emails.append(msg)
@@ -199,6 +206,7 @@ def read_emails_imap_old(account: str, client_id: str, refresh_token: str, top: 
 
 # ==================== 方式2: 新版 IMAP 方式 ====================
 
+
 def get_access_token_imap(client_id: str, refresh_token: str) -> Optional[str]:
     """
     新版方式获取 IMAP access_token
@@ -209,7 +217,9 @@ def get_access_token_imap(client_id: str, refresh_token: str) -> Optional[str]:
     try:
         proxies = None
         if PROXY:
-            proxies = {"all": f"http://{PROXY}" if not PROXY.startswith("http") else PROXY}
+            proxies = {
+                "all": f"http://{PROXY}" if not PROXY.startswith("http") else PROXY
+            }
 
         res = requests.post(
             TOKEN_URL_IMAP,
@@ -217,10 +227,10 @@ def get_access_token_imap(client_id: str, refresh_token: str) -> Optional[str]:
                 "client_id": client_id,
                 "grant_type": "refresh_token",
                 "refresh_token": refresh_token,
-                "scope": "https://outlook.office.com/IMAP.AccessAsUser.All offline_access"
+                "scope": "https://outlook.office.com/IMAP.AccessAsUser.All offline_access",
             },
             proxies=proxies,
-            timeout=30
+            timeout=30,
         )
 
         if res.status_code != 200:
@@ -240,7 +250,9 @@ def get_access_token_imap(client_id: str, refresh_token: str) -> Optional[str]:
         return None
 
 
-def read_emails_imap_new(account: str, client_id: str, refresh_token: str, top: int = 10) -> Optional[List]:
+def read_emails_imap_new(
+    account: str, client_id: str, refresh_token: str, top: int = 10
+) -> Optional[List]:
     """
     方式2: 新版 IMAP 方式读取邮件
     使用 outlook.live.com 服务器
@@ -259,16 +271,16 @@ def read_emails_imap_new(account: str, client_id: str, refresh_token: str, top: 
         connection = imaplib.IMAP4_SSL(IMAP_SERVER_NEW, IMAP_PORT)
 
         # 3. XOAUTH2 认证
-        auth_string = f"user={account}\1auth=Bearer {access_token}\1\1".encode('utf-8')
-        connection.authenticate('XOAUTH2', lambda x: auth_string)
+        auth_string = f"user={account}\1auth=Bearer {access_token}\1\1".encode("utf-8")
+        connection.authenticate("XOAUTH2", lambda x: auth_string)
         print("  ✅ IMAP 认证成功")
 
         # 4. 选择收件箱
         connection.select('"INBOX"')
 
         # 5. 搜索邮件
-        status, messages = connection.search(None, 'ALL')
-        if status != 'OK' or not messages or not messages[0]:
+        status, messages = connection.search(None, "ALL")
+        if status != "OK" or not messages or not messages[0]:
             print("  ⚠️ 收件箱为空")
             return []
 
@@ -281,8 +293,8 @@ def read_emails_imap_new(account: str, client_id: str, refresh_token: str, top: 
         emails = []
         for msg_id in recent_ids:
             try:
-                status, msg_data = connection.fetch(msg_id, '(RFC822)')
-                if status == 'OK' and msg_data and msg_data[0]:
+                status, msg_data = connection.fetch(msg_id, "(RFC822)")
+                if status == "OK" and msg_data and msg_data[0]:
                     raw_email = msg_data[0][1]
                     msg = email.message_from_bytes(raw_email)
                     emails.append(msg)
@@ -305,6 +317,7 @@ def read_emails_imap_new(account: str, client_id: str, refresh_token: str, top: 
 
 # ==================== 方式3: Graph API 方式 ====================
 
+
 def get_access_token_graph(client_id: str, refresh_token: str) -> Optional[str]:
     """
     Graph API 方式获取 access_token
@@ -315,7 +328,9 @@ def get_access_token_graph(client_id: str, refresh_token: str) -> Optional[str]:
     try:
         proxies = None
         if PROXY:
-            proxies = {"all": f"http://{PROXY}" if not PROXY.startswith("http") else PROXY}
+            proxies = {
+                "all": f"http://{PROXY}" if not PROXY.startswith("http") else PROXY
+            }
 
         res = requests.post(
             TOKEN_URL_GRAPH,
@@ -323,10 +338,10 @@ def get_access_token_graph(client_id: str, refresh_token: str) -> Optional[str]:
                 "client_id": client_id,
                 "grant_type": "refresh_token",
                 "refresh_token": refresh_token,
-                "scope": "https://graph.microsoft.com/.default"
+                "scope": "https://graph.microsoft.com/.default",
             },
             proxies=proxies,
-            timeout=30
+            timeout=30,
         )
 
         if res.status_code != 200:
@@ -346,7 +361,9 @@ def get_access_token_graph(client_id: str, refresh_token: str) -> Optional[str]:
         return None
 
 
-def read_emails_graph(client_id: str, refresh_token: str, top: int = 10) -> Optional[List[Dict]]:
+def read_emails_graph(
+    client_id: str, refresh_token: str, top: int = 10
+) -> Optional[List[Dict]]:
     """
     方式3: Graph API 方式读取邮件
     使用 Microsoft Graph API
@@ -371,14 +388,16 @@ def read_emails_graph(client_id: str, refresh_token: str, top: int = 10) -> Opti
             "$top": top,
             "$select": "id,subject,from,receivedDateTime,isRead,hasAttachments,bodyPreview",
             "$orderby": "receivedDateTime desc",
-            "$count": "true"
+            "$count": "true",
         }
         headers = {
             "Authorization": f"Bearer {access_token}",
-            "Prefer": "outlook.body-content-type='text'"
+            "Prefer": "outlook.body-content-type='text'",
         }
 
-        res = requests.get(url, headers=headers, params=params, proxies=proxies, timeout=30)
+        res = requests.get(
+            url, headers=headers, params=params, proxies=proxies, timeout=30
+        )
 
         if res.status_code != 200:
             print(f"  ❌ Graph API 调用失败: {res.status_code}")
@@ -398,6 +417,7 @@ def read_emails_graph(client_id: str, refresh_token: str, top: int = 10) -> Opti
 
 
 # ==================== 主函数 ====================
+
 
 def main():
     """主函数：使用三种方式读取邮件"""

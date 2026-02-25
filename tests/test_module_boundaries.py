@@ -18,12 +18,16 @@ class ModuleBoundaryTests(unittest.TestCase):
                     modules.add(node.module)
         return modules
 
-    def _assert_forbidden_imports(self, *, path: Path, forbidden_prefixes: tuple[str, ...]):
+    def _assert_forbidden_imports(
+        self, *, path: Path, forbidden_prefixes: tuple[str, ...]
+    ):
         imports = self._collect_import_modules(path)
         for module in sorted(imports):
             for prefix in forbidden_prefixes:
                 if module == prefix or module.startswith(prefix + "."):
-                    self.fail(f"模块边界违规：{path} 导入了禁止依赖 {module!r}（匹配前缀 {prefix!r}）")
+                    self.fail(
+                        f"模块边界违规：{path} 导入了禁止依赖 {module!r}（匹配前缀 {prefix!r}）"
+                    )
 
     def test_routes_do_not_import_services_repos_or_legacy(self):
         repo_root = Path(__file__).resolve().parents[1]
@@ -71,4 +75,3 @@ class ModuleBoundaryTests(unittest.TestCase):
             if path.name == "__init__.py":
                 continue
             self._assert_forbidden_imports(path=path, forbidden_prefixes=forbidden)
-

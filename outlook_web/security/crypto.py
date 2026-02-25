@@ -30,7 +30,11 @@ def verify_password(password: str, hashed: str) -> bool:
 
 def is_password_hashed(password: str) -> bool:
     """检查密码是否已经是 bcrypt 哈希值"""
-    return password.startswith("$2b$") or password.startswith("$2a$") or password.startswith("$2y$")
+    return (
+        password.startswith("$2b$")
+        or password.startswith("$2a$")
+        or password.startswith("$2y$")
+    )
 
 
 def get_encryption_key() -> bytes:
@@ -104,11 +108,13 @@ def decrypt_data(encrypted_data: str) -> str:
         error_msg = f"Failed to decrypt data: {str(e)}"
         print(f"[ERROR] {error_msg}", file=sys.stderr)
         print(f"[ERROR] Data preview: {encrypted_data[:50]}...", file=sys.stderr)
-        print("[ERROR] This usually means SECRET_KEY has changed or data is corrupted", file=sys.stderr)
+        print(
+            "[ERROR] This usually means SECRET_KEY has changed or data is corrupted",
+            file=sys.stderr,
+        )
         raise RuntimeError(error_msg)
 
 
 def is_encrypted(data: str) -> bool:
     """检查数据是否已加密"""
     return bool(data) and data.startswith("enc:")
-

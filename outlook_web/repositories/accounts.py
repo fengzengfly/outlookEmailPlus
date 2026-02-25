@@ -82,7 +82,11 @@ def load_accounts(group_id: int = None) -> List[Dict]:
         except Exception:
             account_id_value = None
 
-        account["tags"] = tags_by_account.get(account_id_value, []) if account_id_value is not None else []
+        account["tags"] = (
+            tags_by_account.get(account_id_value, [])
+            if account_id_value is not None
+            else []
+        )
         accounts.append(account)
     return accounts
 
@@ -151,14 +155,23 @@ def add_account(
     db = db or get_db()
     try:
         encrypted_password = encrypt_data(password) if password else password
-        encrypted_refresh_token = encrypt_data(refresh_token) if refresh_token else refresh_token
+        encrypted_refresh_token = (
+            encrypt_data(refresh_token) if refresh_token else refresh_token
+        )
 
         db.execute(
             """
             INSERT INTO accounts (email, password, client_id, refresh_token, group_id, remark)
             VALUES (?, ?, ?, ?, ?, ?)
             """,
-            (email_addr, encrypted_password, client_id, encrypted_refresh_token, group_id, remark),
+            (
+                email_addr,
+                encrypted_password,
+                client_id,
+                encrypted_refresh_token,
+                group_id,
+                remark,
+            ),
         )
         if commit:
             db.commit()
@@ -193,7 +206,11 @@ def update_account(
         if not existing:
             return False
 
-        new_client_id = client_id.strip() if isinstance(client_id, str) and client_id.strip() else existing["client_id"]
+        new_client_id = (
+            client_id.strip()
+            if isinstance(client_id, str) and client_id.strip()
+            else existing["client_id"]
+        )
 
         encrypted_password = existing["password"]
         if isinstance(password, str) and password.strip():
@@ -213,7 +230,16 @@ def update_account(
                 group_id = ?, remark = ?, status = ?, updated_at = CURRENT_TIMESTAMP
             WHERE id = ?
             """,
-            (email_addr, encrypted_password, new_client_id, encrypted_refresh_token, group_id, remark, status, account_id),
+            (
+                email_addr,
+                encrypted_password,
+                new_client_id,
+                encrypted_refresh_token,
+                group_id,
+                remark,
+                status,
+                account_id,
+            ),
         )
         db.commit()
         return True
@@ -241,4 +267,3 @@ def delete_account_by_email(email_addr: str) -> bool:
         return True
     except Exception:
         return False
-

@@ -13,6 +13,7 @@ class CoreFeatureTests(unittest.TestCase):
         cls.app = cls.module.app
         # 导入 graph_service 用于 mock
         from outlook_web.services import graph as graph_service
+
         cls.graph_service = graph_service
 
     def setUp(self):
@@ -49,7 +50,12 @@ class CoreFeatureTests(unittest.TestCase):
 
         create = client.post(
             "/api/groups",
-            json={"name": group_name, "description": "desc", "color": "#123456", "proxy_url": ""},
+            json={
+                "name": group_name,
+                "description": "desc",
+                "color": "#123456",
+                "proxy_url": "",
+            },
         )
         self.assertEqual(create.status_code, 200)
         create_data = create.get_json()
@@ -69,7 +75,12 @@ class CoreFeatureTests(unittest.TestCase):
 
         update = client.put(
             f"/api/groups/{group_id}",
-            json={"name": group_name, "description": "desc2", "color": "#654321", "proxy_url": ""},
+            json={
+                "name": group_name,
+                "description": "desc2",
+                "color": "#654321",
+                "proxy_url": "",
+            },
         )
         self.assertEqual(update.status_code, 200)
         self.assertEqual(update.get_json().get("success"), True)
@@ -111,7 +122,9 @@ class CoreFeatureTests(unittest.TestCase):
         self.assertEqual(listing.status_code, 200)
         listing_data = listing.get_json()
         self.assertEqual(listing_data.get("success"), True)
-        self.assertIn(tag_name, [t.get("name") for t in (listing_data.get("tags") or [])])
+        self.assertIn(
+            tag_name, [t.get("name") for t in (listing_data.get("tags") or [])]
+        )
 
         delete = client.delete(f"/api/tags/{tag_id}")
         self.assertEqual(delete.status_code, 200)
@@ -147,7 +160,9 @@ class CoreFeatureTests(unittest.TestCase):
         self.assertTrue(verify_token)
 
         # 使用请求头传递 token（避免 URL/日志泄露）
-        export = client.get("/api/accounts/export", headers={"X-Export-Token": verify_token})
+        export = client.get(
+            "/api/accounts/export", headers={"X-Export-Token": verify_token}
+        )
         self.assertEqual(export.status_code, 200)
         self.assertIn("text/plain", export.headers.get("Content-Type", ""))
         body = export.get_data(as_text=True)
@@ -184,8 +199,13 @@ class CoreFeatureTests(unittest.TestCase):
         # Mock generate_temp_email 返回元组 (email_addr, None)
         # 注意：控制器现在直接使用 gptmail service，需要 mock outlook_web.services.gptmail
         from outlook_web.services import gptmail as gptmail_service
-        with patch.object(gptmail_service, "generate_temp_email", return_value=(email_addr, None)):
-            created = client.post("/api/temp-emails/generate", json={"prefix": "x", "domain": "y"})
+
+        with patch.object(
+            gptmail_service, "generate_temp_email", return_value=(email_addr, None)
+        ):
+            created = client.post(
+                "/api/temp-emails/generate", json={"prefix": "x", "domain": "y"}
+            )
         self.assertEqual(created.status_code, 200)
         created_data = created.get_json()
         self.assertEqual(created_data.get("success"), True)
@@ -195,7 +215,9 @@ class CoreFeatureTests(unittest.TestCase):
         self.assertEqual(listing.status_code, 200)
         listing_data = listing.get_json()
         self.assertEqual(listing_data.get("success"), True)
-        self.assertIn(email_addr, [e.get("email") for e in (listing_data.get("emails") or [])])
+        self.assertIn(
+            email_addr, [e.get("email") for e in (listing_data.get("emails") or [])]
+        )
 
     def test_refresh_all_stream_has_start_and_complete_events(self):
         client = self.app.test_client()
@@ -211,7 +233,9 @@ class CoreFeatureTests(unittest.TestCase):
         finally:
             conn.close()
 
-        with patch.object(self.graph_service, "test_refresh_token", return_value=(True, None)):
+        with patch.object(
+            self.graph_service, "test_refresh_token", return_value=(True, None)
+        ):
             resp = client.get("/api/accounts/refresh-all")
 
         self.assertEqual(resp.status_code, 200)

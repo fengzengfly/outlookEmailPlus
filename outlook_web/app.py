@@ -57,7 +57,11 @@ def create_app(*, autostart_scheduler: Optional[bool] = None):
         data_dir = config.get_database_path()
         if data_dir:
             import os
-            os.makedirs(os.path.dirname(data_dir) if os.path.dirname(data_dir) else ".", exist_ok=True)
+
+            os.makedirs(
+                os.path.dirname(data_dir) if os.path.dirname(data_dir) else ".",
+                exist_ok=True,
+            )
 
         # 初始化数据库
         init_db()
@@ -77,7 +81,9 @@ def create_app(*, autostart_scheduler: Optional[bool] = None):
         # ProxyFix 中间件（仅在配置启用时应用）
         # 注意：启用前必须配置 TRUSTED_PROXIES 环境变量
         if config.get_proxy_fix_enabled():
-            app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
+            app.wsgi_app = ProxyFix(
+                app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1
+            )
 
         # DB teardown（请求结束释放连接）
         register_db(app)
@@ -119,11 +125,15 @@ def create_app(*, autostart_scheduler: Optional[bool] = None):
         from outlook_web.services import graph as graph_service
 
         if scheduler_service.should_autostart_scheduler():
-            scheduler_service.init_scheduler(_APP_INSTANCE, graph_service.test_refresh_token)
+            scheduler_service.init_scheduler(
+                _APP_INSTANCE, graph_service.test_refresh_token
+            )
     elif autostart_scheduler:
         from outlook_web.services import scheduler as scheduler_service
         from outlook_web.services import graph as graph_service
 
-        scheduler_service.init_scheduler(_APP_INSTANCE, graph_service.test_refresh_token)
+        scheduler_service.init_scheduler(
+            _APP_INSTANCE, graph_service.test_refresh_token
+        )
 
     return _APP_INSTANCE

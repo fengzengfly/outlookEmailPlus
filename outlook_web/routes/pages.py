@@ -23,4 +23,3 @@ def create_blueprint(csrf_exempt: Optional[Callable] = None) -> Blueprint:
     bp.add_url_rule("/", view_func=pages_controller.index, methods=["GET"])
     bp.add_url_rule("/api/csrf-token", view_func=csrf_token_view, methods=["GET"])
     return bp
-

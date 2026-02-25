@@ -23,7 +23,15 @@ def create_refresh_run(
             trace_id
         ) VALUES (?, ?, ?, ?, ?, ?, 0, 0, ?)
         """,
-        (run_id, trigger_source, "running", requested_by_ip, requested_by_user_agent, total, trace_id),
+        (
+            run_id,
+            trigger_source,
+            "running",
+            requested_by_ip,
+            requested_by_user_agent,
+            total,
+            trace_id,
+        ),
     )
     conn.commit()
     return run_id
@@ -48,4 +56,3 @@ def finish_refresh_run(
         (status, total, success_count, failed_count, message, run_id),
     )
     conn.commit()
-

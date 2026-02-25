@@ -56,7 +56,9 @@ class ErrorAndTraceTests(unittest.TestCase):
 
     def test_trace_id_can_be_propagated_from_request(self):
         client = self.app.test_client()
-        resp = client.get("/api/__not_found__", headers={"X-Trace-Id": "trace_from_test"})
+        resp = client.get(
+            "/api/__not_found__", headers={"X-Trace-Id": "trace_from_test"}
+        )
         data = resp.get_json()
         self.assertEqual(resp.headers.get("X-Trace-Id"), "trace_from_test")
         self.assertEqual(data["error"].get("trace_id"), "trace_from_test")
@@ -67,7 +69,9 @@ class ErrorAndTraceTests(unittest.TestCase):
         )
         self.assertIn("Bearer ***", sanitized)
         self.assertIn("refresh_token=***", sanitized)
-        self.assertIn('"123456"', 'Bearer abcdefg refresh_token=xyz password: "123456"')  # sanity
+        self.assertIn(
+            '"123456"', 'Bearer abcdefg refresh_token=xyz password: "123456"'
+        )  # sanity
         self.assertNotIn("123456", sanitized)
 
     def test_build_error_payload_sanitizes_message_and_details(self):
@@ -111,11 +115,22 @@ class ErrorAndTraceTests(unittest.TestCase):
         with patch.object(
             accounts_repo,
             "get_account_by_email",
-            return_value={"email": email_addr, "client_id": "cid", "refresh_token": "rt", "group_id": None},
+            return_value={
+                "email": email_addr,
+                "client_id": "cid",
+                "refresh_token": "rt",
+                "group_id": None,
+            },
         ), patch.object(
             graph_service,
             "delete_emails_graph",
-            return_value={"success": False, "error": graph_error, "success_count": 0, "failed_count": 2, "errors": ["e1"]},
+            return_value={
+                "success": False,
+                "error": graph_error,
+                "success_count": 0,
+                "failed_count": 2,
+                "errors": ["e1"],
+            },
         ), patch.object(
             imap_service,
             "delete_emails_imap",
@@ -172,7 +187,12 @@ class ErrorAndTraceTests(unittest.TestCase):
         with patch.object(
             accounts_repo,
             "get_account_by_email",
-            return_value={"email": email_addr, "client_id": "cid", "refresh_token": "rt", "group_id": None},
+            return_value={
+                "email": email_addr,
+                "client_id": "cid",
+                "refresh_token": "rt",
+                "group_id": None,
+            },
         ), patch.object(
             graph_service,
             "delete_emails_graph",
@@ -233,7 +253,9 @@ class ErrorAndTraceTests(unittest.TestCase):
         login = client.post("/login", json={"password": "testpass123"})
         self.assertEqual(login.status_code, 200)
 
-        resp = client.post("/api/settings/validate-cron", json={"cron_expression": "0 2 * * *"})
+        resp = client.post(
+            "/api/settings/validate-cron", json={"cron_expression": "0 2 * * *"}
+        )
         data = resp.get_json()
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(data.get("success"), True)
@@ -332,10 +354,10 @@ class ErrorAndTraceTests(unittest.TestCase):
         try:
             # 插入账号
             cur = conn.execute(
-                '''
+                """
                 INSERT INTO accounts (email, password, client_id, refresh_token, group_id, remark, status)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
-                ''',
+                """,
                 (email_addr, "", client_id, refresh_token, 1, "remark", "active"),
             )
             account_id = cur.lastrowid
@@ -353,10 +375,10 @@ class ErrorAndTraceTests(unittest.TestCase):
 
             # 插入刷新日志（用于 last_refresh_status/error）
             conn.execute(
-                '''
+                """
                 INSERT INTO account_refresh_logs (account_id, account_email, refresh_type, status, error_message)
                 VALUES (?, ?, ?, ?, ?)
-                ''',
+                """,
                 (account_id, email_addr, "manual", "failed", "network_error"),
             )
 
@@ -397,7 +419,9 @@ class ErrorAndTraceTests(unittest.TestCase):
 
         conn = self.module.create_sqlite_connection()
         try:
-            row = conn.execute("SELECT id FROM groups WHERE is_system = 1 LIMIT 1").fetchone()
+            row = conn.execute(
+                "SELECT id FROM groups WHERE is_system = 1 LIMIT 1"
+            ).fetchone()
             self.assertIsNotNone(row)
             system_group_id = row["id"]
         finally:
@@ -421,15 +445,17 @@ class ErrorAndTraceTests(unittest.TestCase):
 
         conn = self.module.create_sqlite_connection()
         try:
-            system_row = conn.execute("SELECT id FROM groups WHERE is_system = 1 LIMIT 1").fetchone()
+            system_row = conn.execute(
+                "SELECT id FROM groups WHERE is_system = 1 LIMIT 1"
+            ).fetchone()
             self.assertIsNotNone(system_row)
             system_group_id = system_row["id"]
 
             cur = conn.execute(
-                '''
+                """
                 INSERT INTO accounts (email, password, client_id, refresh_token, group_id, remark, status)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
-                ''',
+                """,
                 (email_addr, "", "client", "rt", 1, "", "active"),
             )
             account_id = cur.lastrowid

@@ -11,8 +11,8 @@
 - 设置界面测试（3 个用例）
 """
 
-
 # ==================== 全选功能测试 ====================
+
 
 class FrontendSelectAllTests:
     """
@@ -137,24 +137,24 @@ class FrontendSelectAllTests:
 
     def test_ft_006_reset_on_group_change(self):
         """
-        测试用例 FT-006：切换分组重置全选状态
+           测试用例 FT-006：切换分组重置全选状态
 
-        测试步骤：
-        1. 选中部分或全部邮箱
-        2. 切换到其他分组
-        3. 观察全选复选框状态
+           测试步骤：
+           1. 选中部分或全部邮箱
+           2. 切换到其他分组
+           3. 观察全选复选框状态
 
-        预期结果：
-        - 全选复选框显示为未选中状态
-        - 批量操作栏隐藏
+           预期结果：
+           - 全选复选框显示为未选中状态
+           - 批量操作栏隐藏
 
-        验证方法：
-        ```javascript
-        // 切换分组后
-        const selectAllCheckbox = document.getElementById('selectAllAccounts');
-        console.log('全选框状态:', selectAllCheckbox.checked); // 应该为 false
-     console.log('半选状态:', selectAllCheckbox.indeterminate); // 应该为 false
-        ```
+           验证方法：
+           ```javascript
+           // 切换分组后
+           const selectAllCheckbox = document.getElementById('selectAllAccounts');
+           console.log('全选框状态:', selectAllCheckbox.checked); // 应该为 false
+        console.log('半选状态:', selectAllCheckbox.indeterminate); // 应该为 false
+           ```
         """
         pass
 
@@ -184,6 +184,7 @@ class FrontendSelectAllTests:
 
 
 # ==================== 复制功能测试 ====================
+
 
 class FrontendCopyTests:
     """
@@ -302,6 +303,7 @@ class FrontendCopyTests:
 
 
 # ==================== 轮询功能测试 ====================
+
 
 class FrontendPollingTests:
     """
@@ -428,6 +430,7 @@ class FrontendPollingTests:
 
 
 # ==================== 设置界面测试 ====================
+
 
 class FrontendSettingsTests:
     """

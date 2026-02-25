@@ -162,7 +162,12 @@ def login_required(f):
                     details="need_login",
                     trace_id=trace_id_value,
                 )
-                return jsonify({"success": False, "error": error_payload, "need_login": True}), 401
+                return (
+                    jsonify(
+                        {"success": False, "error": error_payload, "need_login": True}
+                    ),
+                    401,
+                )
             return redirect(url_for("pages.login"))
         return f(*args, **kwargs)
 
@@ -257,7 +262,9 @@ def issue_export_verify_token(client_ip: str, user_agent: str) -> str:
     return verify_token
 
 
-def consume_export_verify_token(verify_token: str, client_ip: str = "", user_agent: str = "") -> tuple[bool, str]:
+def consume_export_verify_token(
+    verify_token: str, client_ip: str = "", user_agent: str = ""
+) -> tuple[bool, str]:
     """
     校验并消费一次性导出验证 token（成功则删除）
 
@@ -288,7 +295,9 @@ def consume_export_verify_token(verify_token: str, client_ip: str = "", user_age
 
         expires_at = row["expires_at"] or 0
         if float(expires_at) < now_ts:
-            db.execute("DELETE FROM export_verify_tokens WHERE token = ?", (verify_token,))
+            db.execute(
+                "DELETE FROM export_verify_tokens WHERE token = ?", (verify_token,)
+            )
             db.commit()
             return False, "验证已过期，请重新验证"
 

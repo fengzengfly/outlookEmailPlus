@@ -18,14 +18,25 @@ from typing import List, Optional, Dict, Any
 
 # 验证码关键词列表（支持中英文）
 VERIFICATION_KEYWORDS = [
-    "验证码", "code", "验证", "verification",
-    "OTP", "动态码", "校验码", "verify code",
-    "confirmation code", "security code", "验证码是",
-    "your code", "code is", "激活码", "短信验证码"
+    "验证码",
+    "code",
+    "验证",
+    "verification",
+    "OTP",
+    "动态码",
+    "校验码",
+    "verify code",
+    "confirmation code",
+    "security code",
+    "验证码是",
+    "your code",
+    "code is",
+    "激活码",
+    "短信验证码",
 ]
 
 # 验证码模式（4-8位数字或字母，必须包含至少一个数字）
-VERIFICATION_PATTERN = r'\b[A-Z0-9]{4,8}\b'
+VERIFICATION_PATTERN = r"\b[A-Z0-9]{4,8}\b"
 
 # 链接正则表达式
 LINK_PATTERN = r'https?://[^\s<>"{}|\\^`\[\]]+'
@@ -37,7 +48,7 @@ class HTMLTextExtractor(HTMLParser):
     def __init__(self):
         super().__init__()
         self.text_parts = []
-        self._skip_tags = {'style', 'script', 'head', 'meta', 'link'}
+        self._skip_tags = {"style", "script", "head", "meta", "link"}
         self._current_skip = False
 
     def handle_starttag(self, tag, attrs):
@@ -177,7 +188,7 @@ def extract_links(email_content: str) -> List[str]:
     cleaned_links = []
     for link in matches:
         # 移除末尾的标点符号
-        cleaned = link.rstrip('.,;:!?)>\'"')
+        cleaned = link.rstrip(".,;:!?)>'\"")
         cleaned_links.append(cleaned)
 
     # 去重并保持顺序
@@ -283,7 +294,7 @@ def extract_verification_info_from_text(email_content: str) -> Dict[str, Any]:
     return {
         "verification_code": verification_code,
         "links": links,
-        "formatted": formatted
+        "formatted": formatted,
     }
 
 

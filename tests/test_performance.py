@@ -13,7 +13,7 @@ import os
 import time
 
 # 添加项目根目录到 Python 路径
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 
 class TestPerformance(unittest.TestCase):
@@ -279,6 +279,6 @@ class TestMemoryUsage(unittest.TestCase):
         self.assertTrue(True, "前端内存测试，需要在浏览器中执行")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # 运行性能测试
     unittest.main(verbosity=2)

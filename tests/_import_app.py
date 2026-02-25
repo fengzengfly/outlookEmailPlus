@@ -37,10 +37,10 @@ def import_web_app_module():
 def clear_login_attempts():
     """清理登录限制记录，避免测试间互相影响"""
     from outlook_web.db import get_db
+
     try:
         db = get_db()
         db.execute("DELETE FROM login_attempts")
         db.commit()
     except Exception:
         pass
-

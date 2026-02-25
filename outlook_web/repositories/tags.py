@@ -17,7 +17,9 @@ def add_tag(name: str, color: str) -> Optional[int]:
     """添加标签"""
     db = get_db()
     try:
-        cursor = db.execute("INSERT INTO tags (name, color) VALUES (?, ?)", (name, color))
+        cursor = db.execute(
+            "INSERT INTO tags (name, color) VALUES (?, ?)", (name, color)
+        )
         db.commit()
         return cursor.lastrowid
     except sqlite3.IntegrityError:
@@ -65,7 +67,9 @@ def add_account_tag(account_id: int, tag_id: int) -> bool:
 def remove_account_tag(account_id: int, tag_id: int) -> bool:
     """移除账号标签"""
     db = get_db()
-    db.execute("DELETE FROM account_tags WHERE account_id = ? AND tag_id = ?", (account_id, tag_id))
+    db.execute(
+        "DELETE FROM account_tags WHERE account_id = ? AND tag_id = ?",
+        (account_id, tag_id),
+    )
     db.commit()
     return True
-

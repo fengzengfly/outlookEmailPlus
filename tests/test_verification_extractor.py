@@ -13,7 +13,7 @@ import sys
 import os
 
 # 添加项目根目录到 Python 路径
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from outlook_web.services.verification_extractor import (
     smart_extract_verification_code,
@@ -21,7 +21,7 @@ from outlook_web.services.verification_extractor import (
     extract_links,
     extract_email_text,
     extract_verification_info,
-    extract_verification_info_from_text
+    extract_verification_info_from_text,
 )
 
 
@@ -338,7 +338,7 @@ class TestVerificationExtractor(unittest.TestCase):
         links = extract_links(email_body)
         self.assertEqual(len(links), 1)
 
-        formatted = ' '.join(links)
+        formatted = " ".join(links)
         self.assertEqual(formatted, "https://example.com/verify?token=abc123def456")
 
     # ==================== extract_verification_info 函数测试 ====================
@@ -347,9 +347,7 @@ class TestVerificationExtractor(unittest.TestCase):
         """
         测试用例：完整提取函数 - 成功提取
         """
-        email = {
-            "body": "您的验证码是 123456，点击 https://example.com/verify 激活。"
-        }
+        email = {"body": "您的验证码是 123456，点击 https://example.com/verify 激活。"}
 
         result = extract_verification_info(email)
         self.assertEqual(result["verification_code"], "123456")
@@ -412,14 +410,11 @@ class TestVerificationExtractor(unittest.TestCase):
         """
         测试用例：邮件文本提取 - bodyContent 格式
         """
-        email = {
-            "bodyContent": "<p>Your code is 555666</p>",
-            "bodyContentType": "html"
-        }
+        email = {"bodyContent": "<p>Your code is 555666</p>", "bodyContentType": "html"}
 
         text = extract_email_text(email)
         self.assertIn("555666", text)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()
