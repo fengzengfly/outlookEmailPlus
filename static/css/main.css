@@ -163,6 +163,16 @@ input, textarea, select { font-family: inherit; }
   transition: all var(--transition);
 }
 .btn-logout:hover { background: rgba(184,92,56,0.35); color: #FAEBD7; }
+.btn-github {
+  width: 100%; padding: 0.45rem;
+  background: rgba(88,166,255,0.15); border: 1px solid rgba(88,166,255,0.3);
+  border-radius: var(--radius-sm); color: rgba(88,166,255,0.9); font-size: 0.78rem;
+  margin-top: 0.4rem; transition: all var(--transition);
+  display: flex; align-items: center; justify-content: center; gap: 0.5rem;
+  text-decoration: none;
+}
+.btn-github:hover { background: rgba(88,166,255,0.25); color: #58A6FF; }
+.btn-github svg { flex-shrink: 0; }
 .btn-theme {
   width: 100%; padding: 0.45rem;
   background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);
@@ -851,7 +861,7 @@ tr:hover td { background: rgba(184,92,56,0.04); }
   .nav-item { justify-content: center; padding: 0.7rem; }
   .sidebar-bottom { padding: 0.5rem; }
   .user-chip { justify-content: center; }
-  .btn-logout, .btn-theme { font-size: 0; padding: 0.45rem 0; }
+  .btn-logout, .btn-github, .btn-theme { font-size: 0; padding: 0.45rem 0; }
   .page { padding: 1rem; }
   .groups-column { width: 180px; }
   .accounts-column { width: 240px; }
