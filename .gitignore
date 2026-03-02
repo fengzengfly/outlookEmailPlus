@@ -34,7 +34,6 @@ data/
 # 内部文档（不开源）
 PRD/
 我们的文档/
-img/
 
 # Node.js
 node_modules/
