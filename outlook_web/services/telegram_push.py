@@ -380,8 +380,16 @@ def run_telegram_push_job(app) -> None:
                 # fetch 失败，不推进游标
                 continue
 
+            # BUG-00011: 游标取 max(job_start_time, 最大 received_at)
+            # 防止邮件服务器时钟偏差 / fetch 窗口期间到达的邮件被重复推送
+            max_received = max(
+                (em.get("received_at", "") for em in emails),
+                default="",
+            )
+            new_cursor = max(job_start_time, max_received) if max_received else job_start_time
+
             if sent_count >= MAX_SENT_PER_JOB:
-                update_telegram_cursor(account["id"], job_start_time)
+                update_telegram_cursor(account["id"], new_cursor)
                 continue
 
             for em in sorted(emails, key=lambda e: e.get("received_at", "")):
@@ -397,7 +405,7 @@ def run_telegram_push_job(app) -> None:
                     if TELEGRAM_PUSH_DELAY_SEC > 0:
                         time.sleep(TELEGRAM_PUSH_DELAY_SEC)
 
-            update_telegram_cursor(account["id"], job_start_time)
+            update_telegram_cursor(account["id"], new_cursor)
 
     elapsed = time.monotonic() - t0
     logger.info("[telegram_push] job finished: sent=%d elapsed=%.1fs", sent_count, elapsed)

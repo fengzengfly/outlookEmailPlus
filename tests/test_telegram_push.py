@@ -1134,5 +1134,140 @@ class TestParallelJobBehavior(unittest.TestCase):
             self.assertEqual(len(send_calls), 1, "1 小时内的邮件应正常推送")
 
 
+class TestCursorClockSkew(unittest.TestCase):
+    """BUG-00011: 邮件服务器时钟偏差导致重复推送"""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.app = _get_app()
+
+    def setUp(self):
+        with self.app.app_context():
+            from outlook_web.db import get_db
+            db = get_db()
+            db.execute("DELETE FROM accounts WHERE email LIKE '%@clockskew.com'")
+            db.execute("UPDATE accounts SET telegram_push_enabled = 0")
+            db.commit()
+
+    def _set_settings(self):
+        from outlook_web.repositories.settings import set_setting
+        from outlook_web.security.crypto import encrypt_data
+        set_setting("telegram_bot_token", encrypt_data("test_token_12345678"))
+        set_setting("telegram_chat_id", "-12345")
+
+    def _run_job(self):
+        from outlook_web.services.telegram_push import run_telegram_push_job
+        run_telegram_push_job(self.app)
+
+    def test_cursor_advances_past_future_email(self):
+        """BUG-00011: 邮件 received_at > job_start_time 时，游标应推进到 received_at"""
+        with self.app.app_context():
+            from outlook_web.db import get_db
+            db = get_db()
+            acc_id = _insert_test_account(db, "skew@clockskew.com", enabled=1,
+                                          last_checked="2026-03-01T00:00:00")
+            self._set_settings()
+
+            # 模拟邮件服务器时钟快 5 秒：received_at 在 "未来"
+            from datetime import timedelta
+            future_time = (datetime.now(timezone.utc) + timedelta(seconds=5)).strftime("%Y-%m-%dT%H:%M:%S")
+            emails = [{
+                "subject": "Clock skew email",
+                "sender": "s@test.com",
+                "received_at": future_time,
+                "preview": "test",
+            }]
+
+            with patch("outlook_web.services.telegram_push._fetch_new_emails_imap", return_value=emails), \
+                 patch("outlook_web.services.telegram_push._send_telegram_message", return_value=True) as mock_send, \
+                 patch("outlook_web.services.telegram_push.TELEGRAM_PUSH_DELAY_SEC", 0):
+                self._run_job()
+
+                mock_send.assert_called_once()
+
+            cursor = db.execute(
+                "SELECT telegram_last_checked_at FROM accounts WHERE id = ?", (acc_id,)
+            ).fetchone()["telegram_last_checked_at"]
+            # 游标必须 >= future_time，否则下一轮会重复拉取
+            self.assertGreaterEqual(cursor, future_time,
+                f"游标 {cursor} 应 >= 邮件时间 {future_time}，否则会重复推送")
+
+    def test_cursor_uses_job_start_when_emails_older(self):
+        """正常场景：邮件 received_at < job_start_time，游标 = job_start_time"""
+        with self.app.app_context():
+            from outlook_web.db import get_db
+            db = get_db()
+            acc_id = _insert_test_account(db, "normal@clockskew.com", enabled=1,
+                                          last_checked="2026-03-01T00:00:00")
+            self._set_settings()
+
+            from datetime import timedelta
+            past_time = (datetime.now(timezone.utc) - timedelta(minutes=5)).strftime("%Y-%m-%dT%H:%M:%S")
+            emails = [{
+                "subject": "Normal email",
+                "sender": "s@test.com",
+                "received_at": past_time,
+                "preview": "test",
+            }]
+
+            before_job = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
+
+            with patch("outlook_web.services.telegram_push._fetch_new_emails_imap", return_value=emails), \
+                 patch("outlook_web.services.telegram_push._send_telegram_message", return_value=True), \
+                 patch("outlook_web.services.telegram_push.TELEGRAM_PUSH_DELAY_SEC", 0):
+                self._run_job()
+
+            cursor = db.execute(
+                "SELECT telegram_last_checked_at FROM accounts WHERE id = ?", (acc_id,)
+            ).fetchone()["telegram_last_checked_at"]
+            # 游标应 >= job 开始前的时间（即 job_start_time）
+            self.assertGreaterEqual(cursor, before_job,
+                f"游标 {cursor} 应 >= {before_job}")
+            # 游标应 > 邮件时间
+            self.assertGreater(cursor, past_time)
+
+    def test_no_duplicate_after_clock_skew(self):
+        """BUG-00011 端到端: 时钟偏差邮件推送 1 次后不应再被推送"""
+        with self.app.app_context():
+            from outlook_web.db import get_db
+            db = get_db()
+            acc_id = _insert_test_account(db, "e2e@clockskew.com", enabled=1,
+                                          last_checked="2026-03-01T00:00:00")
+            self._set_settings()
+
+            from datetime import timedelta
+            future_time = (datetime.now(timezone.utc) + timedelta(seconds=3)).strftime("%Y-%m-%dT%H:%M:%S")
+            emails = [{
+                "subject": "Skew E2E",
+                "sender": "s@test.com",
+                "received_at": future_time,
+                "preview": "test",
+            }]
+
+            with patch("outlook_web.services.telegram_push._fetch_new_emails_imap", return_value=emails), \
+                 patch("outlook_web.services.telegram_push._send_telegram_message", return_value=True) as mock_send, \
+                 patch("outlook_web.services.telegram_push.TELEGRAM_PUSH_DELAY_SEC", 0):
+                self._run_job()
+            self.assertEqual(mock_send.call_count, 1)
+
+            # 读取第一轮 job 后的游标
+            cursor_after_1 = db.execute(
+                "SELECT telegram_last_checked_at FROM accounts WHERE id = ?", (acc_id,)
+            ).fetchone()["telegram_last_checked_at"]
+
+            # 第二轮 Job：用实际游标值作为 since，模拟 fetch 不再返回该邮件
+            def smart_fetch(account, since):
+                # 如果游标正确（>= future_time），该邮件不应被返回
+                return [e for e in emails if e["received_at"] > since]
+
+            with patch("outlook_web.services.telegram_push._fetch_new_emails_imap", side_effect=smart_fetch), \
+                 patch("outlook_web.services.telegram_push._send_telegram_message", return_value=True) as mock_send2, \
+                 patch("outlook_web.services.telegram_push.TELEGRAM_PUSH_DELAY_SEC", 0):
+                self._run_job()
+
+            # 第二轮不应推送任何消息
+            mock_send2.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main()
