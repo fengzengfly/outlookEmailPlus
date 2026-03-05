@@ -166,7 +166,10 @@
                 return;
             }
 
-            container.innerHTML = '<div class="loading-overlay"><span class="spinner"></span> 加载中…</div>';
+            // forceRefresh 时不显示 loading（保持旧内容，静默刷新）
+            if (!forceRefresh) {
+                container.innerHTML = '<div class="loading-overlay"><span class="spinner"></span> 加载中…</div>';
+            }
 
             try {
                 const response = await fetch(`/api/accounts?group_id=${groupId}`);
@@ -178,7 +181,7 @@
                     renderAccountList(data.accounts);
                     // 恢复滚动位置
                     if (forceRefresh) {
-                        container.scrollTop = savedScrollTop;
+                        requestAnimationFrame(() => { container.scrollTop = savedScrollTop; });
                     }
                 }
             } catch (error) {
