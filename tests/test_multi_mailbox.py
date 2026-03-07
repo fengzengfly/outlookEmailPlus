@@ -267,7 +267,7 @@ class MultiMailboxSupportTests(unittest.TestCase):
 
         def fake_test_refresh_token(client_id, refresh_token, proxy_url):
             called.append((client_id, refresh_token, proxy_url))
-            return True, "ok"
+            return True, "ok", "rt_new_" + unique
 
         with (
             patch("outlook_web.services.scheduler.time.sleep", return_value=None),
@@ -282,6 +282,16 @@ class MultiMailboxSupportTests(unittest.TestCase):
         self.assertGreaterEqual(len(called), 1)
         self.assertTrue(any(cid == "client_" + unique for cid, _, _ in called))
         self.assertFalse(any(cid == "" for cid, _, _ in called))  # 不应包含 IMAP 账号（空 client_id）
+
+        # 成功刷新时应写回滚动更新后的 refresh_token（加密存储）
+        conn = self.module.create_sqlite_connection()
+        try:
+            row = conn.execute("SELECT refresh_token, last_refresh_at FROM accounts WHERE email = ?", (outlook_email,)).fetchone()
+            self.assertIsNotNone(row)
+            self.assertEqual(self.module.decrypt_data(row["refresh_token"]), "rt_new_" + unique)
+            self.assertTrue(row["last_refresh_at"])
+        finally:
+            conn.close()
 
     def test_export_format_outlook_first_then_imap_grouped(self):
         client = self.app.test_client()

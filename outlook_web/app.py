@@ -141,11 +141,11 @@ def create_app(*, autostart_scheduler: Optional[bool] = None):
         from outlook_web.services import scheduler as scheduler_service
 
         if scheduler_service.should_autostart_scheduler():
-            scheduler_service.init_scheduler(_APP_INSTANCE, graph_service.test_refresh_token)
+            scheduler_service.init_scheduler(_APP_INSTANCE, graph_service.test_refresh_token_with_rotation)
     elif autostart_scheduler:
         from outlook_web.services import graph as graph_service
         from outlook_web.services import scheduler as scheduler_service
 
-        scheduler_service.init_scheduler(_APP_INSTANCE, graph_service.test_refresh_token)
+        scheduler_service.init_scheduler(_APP_INSTANCE, graph_service.test_refresh_token_with_rotation)
 
     return _APP_INSTANCE

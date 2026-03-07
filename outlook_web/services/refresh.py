@@ -13,7 +13,7 @@ from outlook_web.repositories.distributed_locks import (
     release_distributed_lock,
 )
 from outlook_web.repositories.refresh_runs import create_refresh_run, finish_refresh_run
-from outlook_web.security.crypto import decrypt_data
+from outlook_web.security.crypto import decrypt_data, encrypt_data
 
 REFRESH_LOCK_TTL_SECONDS = 60 * 60 * 2  # 2 小时，避免异常中断导致长时间卡死
 
@@ -44,7 +44,7 @@ def stream_refresh_all_accounts(
     requested_by_ip: str,
     requested_by_user_agent: str,
     lock_name: str,
-    test_refresh_token: Callable[[str, str, Optional[str]], Tuple[bool, Optional[str]]],
+    test_refresh_token: Callable[[str, str, Optional[str]], Tuple[bool, Optional[str], Optional[str]]],
 ) -> Iterator[str]:
     """刷新所有账号 token（SSE 流式输出）"""
     conn = create_sqlite_connection()
@@ -172,7 +172,7 @@ def stream_refresh_all_accounts(
                 except Exception:
                     proxy_url = ""
 
-            success, error_msg = test_refresh_token(client_id, refresh_token, proxy_url)
+            success, error_msg, new_refresh_token = test_refresh_token(client_id, refresh_token, proxy_url)
 
             try:
                 conn.execute(
@@ -191,6 +191,19 @@ def stream_refresh_all_accounts(
                 )
 
                 if success:
+                    if (
+                        isinstance(new_refresh_token, str)
+                        and new_refresh_token.strip()
+                        and new_refresh_token != refresh_token
+                    ):
+                        conn.execute(
+                            """
+                            UPDATE accounts
+                            SET refresh_token = ?, updated_at = CURRENT_TIMESTAMP
+                            WHERE id = ?
+                        """,
+                            (encrypt_data(new_refresh_token), account_id),
+                        )
                     conn.execute(
                         """
                         UPDATE accounts
@@ -271,7 +284,7 @@ def stream_trigger_scheduled_refresh(
     requested_by_ip: str,
     requested_by_user_agent: str,
     lock_name: str,
-    test_refresh_token: Callable[[str, str, Optional[str]], Tuple[bool, Optional[str]]],
+    test_refresh_token: Callable[[str, str, Optional[str]], Tuple[bool, Optional[str], Optional[str]]],
 ) -> Iterator[str]:
     """手动触发定时刷新（SSE 流式输出）"""
     conn = create_sqlite_connection()
@@ -443,7 +456,7 @@ def stream_trigger_scheduled_refresh(
                 if group_row:
                     proxy_url = group_row["proxy_url"] or ""
 
-            success, error_msg = test_refresh_token(client_id, refresh_token, proxy_url)
+            success, error_msg, new_refresh_token = test_refresh_token(client_id, refresh_token, proxy_url)
 
             try:
                 conn.execute(
@@ -462,6 +475,19 @@ def stream_trigger_scheduled_refresh(
                 )
 
                 if success:
+                    if (
+                        isinstance(new_refresh_token, str)
+                        and new_refresh_token.strip()
+                        and new_refresh_token != refresh_token
+                    ):
+                        conn.execute(
+                            """
+                            UPDATE accounts
+                            SET refresh_token = ?, updated_at = CURRENT_TIMESTAMP
+                            WHERE id = ?
+                        """,
+                            (encrypt_data(new_refresh_token), account_id),
+                        )
                     conn.execute(
                         """
                         UPDATE accounts
@@ -541,7 +567,7 @@ def refresh_failed_accounts(
     requested_by_ip: str,
     requested_by_user_agent: str,
     lock_name: str,
-    test_refresh_token: Callable[[str, str, Optional[str]], Tuple[bool, Optional[str]]],
+    test_refresh_token: Callable[[str, str, Optional[str]], Tuple[bool, Optional[str], Optional[str]]],
 ) -> Tuple[Dict[str, Any], int]:
     """重试所有失败的账号（非流式）"""
     lock_owner_id = uuid.uuid4().hex
@@ -627,7 +653,7 @@ def refresh_failed_accounts(
                     pass
                 continue
 
-            success, error_msg = test_refresh_token(client_id, refresh_token, proxy_url)
+            success, error_msg, new_refresh_token = test_refresh_token(client_id, refresh_token, proxy_url)
             try:
                 from outlook_web.repositories.refresh_logs import log_refresh_result
 
@@ -643,6 +669,31 @@ def refresh_failed_accounts(
                 pass
 
             if success:
+                try:
+                    if (
+                        isinstance(new_refresh_token, str)
+                        and new_refresh_token.strip()
+                        and new_refresh_token != refresh_token
+                    ):
+                        db.execute(
+                            """
+                            UPDATE accounts
+                            SET refresh_token = ?, updated_at = CURRENT_TIMESTAMP
+                            WHERE id = ?
+                        """,
+                            (encrypt_data(new_refresh_token), account_id),
+                        )
+                    db.execute(
+                        """
+                        UPDATE accounts
+                        SET last_refresh_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+                        WHERE id = ?
+                    """,
+                        (account_id,),
+                    )
+                    db.commit()
+                except Exception:
+                    pass
                 success_count += 1
             else:
                 failed_count += 1

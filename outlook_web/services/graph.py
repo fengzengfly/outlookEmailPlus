@@ -61,7 +61,9 @@ def get_access_token_graph_result(client_id: str, refresh_token: str, proxy_url:
                 ),
             }
 
-        return {"success": True, "access_token": access_token}
+        # 根据 Microsoft Learn 文档：refresh token 可能会在每次使用时“自我替换”，应保存新的 refresh_token（如有）。
+        new_refresh_token = payload.get("refresh_token")
+        return {"success": True, "access_token": access_token, "refresh_token": new_refresh_token}
     except Exception as exc:
         return {
             "success": False,
@@ -183,6 +185,14 @@ def get_email_detail_graph(
 
 def test_refresh_token(client_id: str, refresh_token: str, proxy_url: str = None) -> tuple[bool, str | None]:
     """测试 refresh token 是否有效，返回 (是否成功, 错误信息)"""
+    ok, err, _new_refresh_token = test_refresh_token_with_rotation(client_id, refresh_token, proxy_url)
+    return ok, err
+
+
+def test_refresh_token_with_rotation(
+    client_id: str, refresh_token: str, proxy_url: str = None
+) -> tuple[bool, str | None, str | None]:
+    """测试 refresh token 是否有效；如服务端返回新的 refresh_token，则一并返回（用于滚动更新）。"""
     try:
         proxies = build_proxies(proxy_url)
         res = requests.post(
@@ -198,13 +208,26 @@ def test_refresh_token(client_id: str, refresh_token: str, proxy_url: str = None
         )
 
         if res.status_code == 200:
-            return True, None
+            try:
+                payload = res.json()
+            except Exception:
+                payload = {}
+            new_refresh_token = payload.get("refresh_token")
+            return True, None, new_refresh_token
 
-        error_data = res.json()
-        error_msg = error_data.get("error_description", error_data.get("error", "未知错误"))
-        return False, error_msg
+        try:
+            error_data = res.json()
+        except Exception:
+            error_data = {}
+        error_msg = None
+        if isinstance(error_data, dict):
+            error_msg = error_data.get("error_description") or error_data.get("error")
+        if not error_msg:
+            details = get_response_details(res)
+            error_msg = str(details)[:800] if details is not None else "未知错误"
+        return False, str(error_msg), None
     except Exception as e:
-        return False, f"请求异常: {str(e)}"
+        return False, f"请求异常: {str(e)}", None
 
 
 def delete_emails_graph(

@@ -26,7 +26,7 @@ from outlook_web.repositories.distributed_locks import (
     release_distributed_lock,
 )
 from outlook_web.repositories.refresh_runs import create_refresh_run, finish_refresh_run
-from outlook_web.security.crypto import decrypt_data
+from outlook_web.security.crypto import decrypt_data, encrypt_data
 
 # 调度器实例
 _scheduler_instance = None
@@ -349,7 +349,7 @@ def scheduled_refresh_task(app, test_refresh_token):
                 except Exception:
                     proxy_url = ""
 
-            success, error_msg = test_refresh_token(client_id, refresh_token, proxy_url)
+            success, error_msg, new_refresh_token = test_refresh_token(client_id, refresh_token, proxy_url)
 
             try:
                 conn.execute(
@@ -368,6 +368,16 @@ def scheduled_refresh_task(app, test_refresh_token):
                 )
 
                 if success:
+                    # refresh token 可能滚动更新：保存新的 refresh_token（加密存储）
+                    if isinstance(new_refresh_token, str) and new_refresh_token.strip() and new_refresh_token != refresh_token:
+                        conn.execute(
+                            """
+                            UPDATE accounts
+                            SET refresh_token = ?, updated_at = CURRENT_TIMESTAMP
+                            WHERE id = ?
+                        """,
+                            (encrypt_data(new_refresh_token), account_id),
+                        )
                     conn.execute(
                         """
                         UPDATE accounts

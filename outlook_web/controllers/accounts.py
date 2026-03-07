@@ -1600,8 +1600,8 @@ def api_refresh_account(account_id: int) -> Any:
         error_payload = build_error_payload("TOKEN_DECRYPT_FAILED", "Token 解密失败", "DecryptionError", 500, error_msg)
         return jsonify({"success": False, "error": error_payload})
 
-    # 测试 refresh token
-    success, error_msg = graph_service.test_refresh_token(client_id, refresh_token, proxy_url)
+    # 测试 refresh token（并支持滚动更新 refresh_token）
+    success, error_msg, new_refresh_token = graph_service.test_refresh_token_with_rotation(client_id, refresh_token, proxy_url)
 
     # 记录刷新结果
     refresh_logs_repo.log_refresh_result(
@@ -1613,6 +1613,20 @@ def api_refresh_account(account_id: int) -> Any:
     )
 
     if success:
+        try:
+            if (
+                isinstance(new_refresh_token, str)
+                and new_refresh_token.strip()
+                and new_refresh_token != refresh_token
+            ):
+                accounts_repo.update_account_credentials(account_id, refresh_token=new_refresh_token)
+            db.execute(
+                "UPDATE accounts SET last_refresh_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                (account_id,),
+            )
+            db.commit()
+        except Exception:
+            pass
         return jsonify({"success": True, "message": "Token 刷新成功"})
 
     error_payload = build_error_payload(
@@ -1642,7 +1656,7 @@ def api_refresh_all_accounts() -> Any:
             requested_by_ip=requested_by_ip,
             requested_by_user_agent=requested_by_user_agent,
             lock_name=REFRESH_LOCK_NAME,
-            test_refresh_token=graph_service.test_refresh_token,
+            test_refresh_token=graph_service.test_refresh_token_with_rotation,
         )
 
     return Response(generate(), mimetype="text/event-stream")
@@ -1672,7 +1686,7 @@ def api_refresh_failed_accounts() -> Any:
         requested_by_ip=requested_by_ip,
         requested_by_user_agent=requested_by_user_agent,
         lock_name=REFRESH_LOCK_NAME,
-        test_refresh_token=graph_service.test_refresh_token,
+        test_refresh_token=graph_service.test_refresh_token_with_rotation,
     )
     return jsonify(response_data), status_code
 
@@ -1703,7 +1717,7 @@ def api_trigger_scheduled_refresh() -> Any:
             requested_by_ip=requested_by_ip,
             requested_by_user_agent=requested_by_user_agent,
             lock_name=REFRESH_LOCK_NAME,
-            test_refresh_token=graph_service.test_refresh_token,
+            test_refresh_token=graph_service.test_refresh_token_with_rotation,
         )
 
     return Response(generate(), mimetype="text/event-stream")

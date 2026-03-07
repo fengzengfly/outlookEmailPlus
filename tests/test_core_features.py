@@ -223,7 +223,7 @@ class CoreFeatureTests(unittest.TestCase):
         finally:
             conn.close()
 
-        with patch.object(self.graph_service, "test_refresh_token", return_value=(True, None)):
+        with patch.object(self.graph_service, "test_refresh_token_with_rotation", return_value=(True, None, None)):
             resp = client.get("/api/accounts/refresh-all")
 
         self.assertEqual(resp.status_code, 200)
