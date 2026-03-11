@@ -250,7 +250,7 @@
 - [x] 手动联调通过（QQ 邮箱 IMAP 读取成功；Outlook 因网络 SSL 受阻）
 - [x] 文档与代码口径一致
 - [x] README / API 文档未把当前版本描述为公网开放平台（已核查）
-- [ ] `raw` 与 `wait-message` 的风险说明对外可见
+- [x] `raw` 与 `wait-message` 的风险说明对外可见（已在 api.md 中补充独立风险段落）
 - [x] 确认本次发布属于：P0 收口
 
 ---
