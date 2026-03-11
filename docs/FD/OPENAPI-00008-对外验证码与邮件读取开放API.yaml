@@ -26,6 +26,8 @@ tags:
     description: 邮件列表、详情与 RAW 内容查询
   - name: Verification
     description: 验证码与验证链接提取
+  - name: Probe
+    description: 异步邮件探测（wait-message 解耦）
   - name: System
     description: 外部健康检查、能力查询、账号状态检查
 paths:
@@ -246,6 +248,10 @@ paths:
         在指定超时时间内轮询等待符合条件的新邮件到达。
 
         适用于自动化注册流程，减少客户端频繁轮询。
+
+        支持两种模式：
+        - `mode=sync`（默认）：阻塞等待，直到匹配邮件到达或超时
+        - `mode=async`：立即返回探测任务 ID（202），后台轮询，客户端通过 `/api/external/probe/{probe_id}` 查询结果
       operationId: waitExternalMessage
       parameters:
         - $ref: '#/components/parameters/Email'
@@ -255,13 +261,20 @@ paths:
         - $ref: '#/components/parameters/SinceMinutesOptional'
         - $ref: '#/components/parameters/TimeoutSeconds'
         - $ref: '#/components/parameters/PollInterval'
+        - $ref: '#/components/parameters/Mode'
       responses:
         '200':
-          description: 成功命中新邮件
+          description: 同步模式 — 成功命中新邮件
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/LatestMessageResponse'
+        '202':
+          description: 异步模式 — 探测任务已创建
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProbeCreatedResponse'
         '400':
           $ref: '#/components/responses/InvalidParam'
         '401':
@@ -272,6 +285,45 @@ paths:
           $ref: '#/components/responses/MailNotFound'
         '502':
           $ref: '#/components/responses/UpstreamReadFailed'
+  /api/external/probe/{probe_id}:
+    get:
+      tags: [Probe]
+      summary: 查询异步探测状态
+      description: |
+        查询由 `mode=async` 创建的探测任务当前状态与结果。
+
+        状态流转：`pending` → `polling` → `matched` / `timeout` / `error`
+      operationId: getProbeStatus
+      parameters:
+        - name: probe_id
+          in: path
+          required: true
+          description: 探测任务 ID（由 wait-message async 模式返回）
+          schema:
+            type: string
+          example: ba441dd1259a4bf1a3969445591b67c3
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProbeStatusResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/ApiKeyNotConfigured'
+        '404':
+          description: 探测任务不存在或已过期
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                code: PROBE_NOT_FOUND
+                message: 探测任务不存在或已过期
+                data: null
   /api/external/health:
     get:
       tags: [System]
@@ -466,6 +518,18 @@ components:
         minimum: 1
         maximum: 30
         default: 5
+    Mode:
+      name: mode
+      in: query
+      required: false
+      description: |
+        执行模式。
+        - `sync`（默认）：阻塞等待直到匹配或超时
+        - `async`：立即返回探测任务 ID，后台异步轮询
+      schema:
+        type: string
+        enum: [sync, async]
+        default: sync
   schemas:
     ErrorResponse:
       type: object
@@ -737,6 +801,16 @@ components:
             - verification_code
             - verification_link
             - wait_message
+        public_mode:
+          type: boolean
+          description: 是否启用公网模式
+          example: false
+        restricted_features:
+          type: array
+          description: 当前被禁用的功能列表（仅 public_mode=true 时可能非空）
+          items:
+            type: string
+          example: []
     AccountStatusData:
       type: object
       required:
@@ -873,6 +947,95 @@ components:
           example: success
         data:
           $ref: '#/components/schemas/VerificationLinkData'
+    ProbeCreatedData:
+      type: object
+      required: [probe_id, status, expires_at, poll_url]
+      properties:
+        probe_id:
+          type: string
+          description: 探测任务唯一 ID
+          example: ba441dd1259a4bf1a3969445591b67c3
+        status:
+          type: string
+          enum: [pending]
+          example: pending
+        expires_at:
+          type: string
+          format: date-time
+          description: 探测任务过期时间
+          example: '2026-03-08T12:00:30Z'
+        poll_url:
+          type: string
+          description: 状态查询地址
+          example: /api/external/probe/ba441dd1259a4bf1a3969445591b67c3
+    ProbeStatusData:
+      type: object
+      required: [probe_id, email, status, created_at, expires_at]
+      properties:
+        probe_id:
+          type: string
+          example: ba441dd1259a4bf1a3969445591b67c3
+        email:
+          type: string
+          format: email
+          example: user@outlook.com
+        status:
+          type: string
+          enum: [pending, polling, matched, timeout, error]
+          description: |
+            探测任务状态：
+            - `pending`：已创建，等待后台轮询
+            - `polling`：后台正在轮询
+            - `matched`：已匹配到邮件
+            - `timeout`：超时未匹配
+            - `error`：轮询出错
+        created_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+        message:
+          description: 匹配到的邮件摘要（仅 status=matched 时存在）
+          $ref: '#/components/schemas/MessageSummary'
+        error_code:
+          type: string
+          description: 错误码（仅 status=timeout 或 error 时存在）
+          example: WAIT_TIMEOUT
+        error_message:
+          type: string
+          description: 错误描述（仅 status=timeout 或 error 时存在）
+          example: 等待超时，未检测到匹配邮件
+    ProbeCreatedResponse:
+      type: object
+      required: [success, code, message, data]
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+        code:
+          type: string
+          example: OK
+        message:
+          type: string
+          example: success
+        data:
+          $ref: '#/components/schemas/ProbeCreatedData'
+    ProbeStatusResponse:
+      type: object
+      required: [success, code, message, data]
+      properties:
+        success:
+          type: boolean
+          enum: [true]
+        code:
+          type: string
+          example: OK
+        message:
+          type: string
+          example: success
+        data:
+          $ref: '#/components/schemas/ProbeStatusData'
     HealthResponse:
       type: object
       required: [success, code, message, data]
@@ -984,4 +1147,37 @@ components:
             success: false
             code: UPSTREAM_READ_FAILED
             message: Graph / IMAP 均读取失败
+            data: null
+    IpNotAllowed:
+      description: 当前 IP 不在白名单中（仅公网模式）
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            code: IP_NOT_ALLOWED
+            message: 当前 IP 不在白名单中
+            data: null
+    FeatureDisabled:
+      description: 该功能已被管理员禁用（仅公网模式）
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            code: FEATURE_DISABLED
+            message: 该功能已被管理员禁用
+            data: null
+    RateLimitExceeded:
+      description: 请求频率超限（仅公网模式）
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            code: RATE_LIMIT_EXCEEDED
+            message: 请求频率超限，请稍后再试
             data: null
