@@ -18,6 +18,7 @@ from outlook_web.db import (
 from outlook_web.repositories import accounts as accounts_repo
 from outlook_web.repositories import settings as settings_repo
 from outlook_web.security.auth import api_key_required, login_required
+from outlook_web.security.external_api_guard import external_api_guards
 from outlook_web.services import external_api as external_api_service
 
 # 常量
@@ -255,6 +256,7 @@ def api_system_upgrade_status() -> Any:
 
 
 @api_key_required
+@external_api_guards()
 def api_external_health() -> Any:
     """对外健康检查（不依赖登录态）"""
     conn = create_sqlite_connection()
@@ -294,19 +296,31 @@ def api_external_health() -> Any:
 
 
 @api_key_required
+@external_api_guards()
 def api_external_capabilities() -> Any:
     """对外能力说明接口"""
+    public_mode = settings_repo.get_external_api_public_mode()
+    restricted = []
+    all_features = [
+        "message_list",
+        "message_detail",
+        "raw_content",
+        "verification_code",
+        "verification_link",
+        "wait_message",
+    ]
+    if public_mode:
+        if settings_repo.get_external_api_disable_raw_content():
+            restricted.append("raw_content")
+        if settings_repo.get_external_api_disable_wait_message():
+            restricted.append("wait_message")
+    available = [f for f in all_features if f not in restricted]
     data = {
         "service": "outlook-email-plus",
         "version": APP_VERSION,
-        "features": [
-            "message_list",
-            "message_detail",
-            "raw_content",
-            "verification_code",
-            "verification_link",
-            "wait_message",
-        ],
+        "public_mode": public_mode,
+        "features": available,
+        "restricted_features": restricted,
     }
     external_api_service.audit_external_api_access(
         action="external_api_access",
@@ -319,6 +333,7 @@ def api_external_capabilities() -> Any:
 
 
 @api_key_required
+@external_api_guards()
 def api_external_account_status() -> Any:
     """对外账号状态检查"""
     email_addr = (request.args.get("email") or "").strip()

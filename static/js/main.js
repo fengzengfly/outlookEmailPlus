@@ -1003,6 +1003,25 @@ ${details}
                         }
                     }
 
+                    // P1：公网安全配置
+                    const publicModeEl = document.getElementById('externalApiPublicMode');
+                    if (publicModeEl) publicModeEl.checked = data.settings.external_api_public_mode === true;
+
+                    const ipWhitelistEl = document.getElementById('externalApiIpWhitelist');
+                    if (ipWhitelistEl) {
+                        const wl = data.settings.external_api_ip_whitelist;
+                        ipWhitelistEl.value = Array.isArray(wl) ? wl.join('\n') : '';
+                    }
+
+                    const rateLimitEl = document.getElementById('externalApiRateLimit');
+                    if (rateLimitEl) rateLimitEl.value = data.settings.external_api_rate_limit_per_minute || 60;
+
+                    const disableRawEl = document.getElementById('externalApiDisableRaw');
+                    if (disableRawEl) disableRawEl.checked = data.settings.external_api_disable_raw_content === true;
+
+                    const disableWaitEl = document.getElementById('externalApiDisableWait');
+                    if (disableWaitEl) disableWaitEl.checked = data.settings.external_api_disable_wait_message === true;
+
                     // 加载刷新配置
                     document.getElementById('refreshIntervalDays').value = data.settings.refresh_interval_days || '30';
                     document.getElementById('refreshDelaySeconds').value = data.settings.refresh_delay_seconds || '5';
@@ -1134,6 +1153,28 @@ ${details}
             if (!(externalApiKeyIsSet && externalApiKey && externalApiKey === externalApiKeyMasked)) {
                 settings.external_api_key = externalApiKey;
             }
+
+            // P1：公网安全配置
+            const publicModeEl = document.getElementById('externalApiPublicMode');
+            if (publicModeEl) settings.external_api_public_mode = publicModeEl.checked;
+
+            const ipWhitelistEl = document.getElementById('externalApiIpWhitelist');
+            if (ipWhitelistEl) {
+                const lines = ipWhitelistEl.value.trim().split('\n').map(l => l.trim()).filter(l => l);
+                settings.external_api_ip_whitelist = lines;
+            }
+
+            const rateLimitEl = document.getElementById('externalApiRateLimit');
+            if (rateLimitEl) {
+                const rl = parseInt(rateLimitEl.value);
+                if (!isNaN(rl)) settings.external_api_rate_limit_per_minute = rl;
+            }
+
+            const disableRawEl = document.getElementById('externalApiDisableRaw');
+            if (disableRawEl) settings.external_api_disable_raw_content = disableRawEl.checked;
+
+            const disableWaitEl = document.getElementById('externalApiDisableWait');
+            if (disableWaitEl) settings.external_api_disable_wait_message = disableWaitEl.checked;
 
             // 刷新配置
             const days = parseInt(refreshDays);

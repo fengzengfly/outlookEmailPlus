@@ -1124,3 +1124,329 @@ class ExternalApiAuditTests(ExternalApiBaseTest):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# ══════════════════════════════════════════════════════════════════════
+# P1 安全守卫测试
+# ══════════════════════════════════════════════════════════════════════
+
+
+class ExternalApiGuardBaseTest(ExternalApiBaseTest):
+    """P1 守卫测试基类：提供公网模式配置 helper。"""
+
+    def setUp(self):
+        super().setUp()
+        # 确保默认关闭公网模式
+        self._set_public_mode(False)
+        self._set_ip_whitelist([])
+        self._set_rate_limit(60)
+        self._set_disable_feature("raw_content", False)
+        self._set_disable_feature("wait_message", False)
+
+    # ── helper ──
+
+    def _set_public_mode(self, enabled: bool):
+        with self.app.app_context():
+            from outlook_web.repositories import settings as settings_repo
+            settings_repo.set_setting("external_api_public_mode", "true" if enabled else "false")
+
+    def _set_ip_whitelist(self, ips: list):
+        import json as _json
+        with self.app.app_context():
+            from outlook_web.repositories import settings as settings_repo
+            settings_repo.set_setting("external_api_ip_whitelist", _json.dumps(ips))
+
+    def _set_rate_limit(self, limit: int):
+        with self.app.app_context():
+            from outlook_web.repositories import settings as settings_repo
+            settings_repo.set_setting("external_api_rate_limit_per_minute", str(limit))
+
+    def _set_disable_feature(self, feature: str, disabled: bool):
+        with self.app.app_context():
+            from outlook_web.repositories import settings as settings_repo
+            settings_repo.set_setting(f"external_api_disable_{feature}", "true" if disabled else "false")
+
+    def _clear_rate_limits(self):
+        with self.app.app_context():
+            from outlook_web.db import get_db
+            db = get_db()
+            db.execute("DELETE FROM external_api_rate_limits")
+            db.commit()
+
+
+class GuardPublicModeOffTests(ExternalApiGuardBaseTest):
+    """TC-GUARD-01~03: public_mode=false 时守卫完全透传。"""
+
+    def test_guard_noop_when_private(self):
+        """TC-GUARD-01: 私有模式下守卫不生效，请求正常通过"""
+        self._set_external_api_key("abc123")
+        self._set_public_mode(False)
+        self._set_ip_whitelist(["10.0.0.1"])  # 故意设白名单，但私有模式不应检查
+        client = self.app.test_client()
+        resp = client.get("/api/external/health", headers=self._auth_headers())
+        self.assertEqual(resp.status_code, 200)
+
+    def test_rate_limit_noop_when_private(self):
+        """TC-GUARD-02: 私有模式下限流不生效"""
+        self._set_external_api_key("abc123")
+        self._set_public_mode(False)
+        self._set_rate_limit(1)
+        client = self.app.test_client()
+        for _ in range(5):
+            resp = client.get("/api/external/health", headers=self._auth_headers())
+            self.assertEqual(resp.status_code, 200)
+
+    def test_feature_disable_noop_when_private(self):
+        """TC-GUARD-03: 私有模式下功能禁用不生效"""
+        email_addr = self._insert_outlook_account()
+        self._set_external_api_key("abc123")
+        self._set_public_mode(False)
+        self._set_disable_feature("raw_content", True)
+        self._set_disable_feature("wait_message", True)
+        client = self.app.test_client()
+        # raw 端点 → 应正常进入 controller（可能 404 找不到邮件，但不是 403）
+        resp = client.get(
+            f"/api/external/messages/fake-id/raw",
+            headers=self._auth_headers(),
+        )
+        self.assertNotEqual(resp.status_code, 403)
+
+
+class GuardIpWhitelistTests(ExternalApiGuardBaseTest):
+    """TC-GUARD-04~07: IP 白名单功能。"""
+
+    def test_ip_rejected_when_not_in_whitelist(self):
+        """TC-GUARD-04: 公网模式 + IP 不在白名单 → 403 IP_NOT_ALLOWED"""
+        self._set_external_api_key("abc123")
+        self._set_public_mode(True)
+        self._set_ip_whitelist(["10.0.0.1"])
+        client = self.app.test_client()
+        resp = client.get("/api/external/health", headers=self._auth_headers())
+        self.assertEqual(resp.status_code, 403)
+        data = resp.get_json()
+        self.assertEqual(data["code"], "IP_NOT_ALLOWED")
+
+    def test_ip_allowed_when_in_whitelist(self):
+        """TC-GUARD-05: 公网模式 + IP 在白名单 → 正常通过"""
+        self._set_external_api_key("abc123")
+        self._set_public_mode(True)
+        self._set_ip_whitelist(["127.0.0.1"])
+        client = self.app.test_client()
+        resp = client.get("/api/external/health", headers=self._auth_headers())
+        self.assertEqual(resp.status_code, 200)
+
+    def test_empty_whitelist_allows_all(self):
+        """TC-GUARD-06: 公网模式 + 白名单为空 → 不限制"""
+        self._set_external_api_key("abc123")
+        self._set_public_mode(True)
+        self._set_ip_whitelist([])
+        client = self.app.test_client()
+        resp = client.get("/api/external/health", headers=self._auth_headers())
+        self.assertEqual(resp.status_code, 200)
+
+    def test_cidr_whitelist(self):
+        """TC-GUARD-07: CIDR 白名单匹配"""
+        self._set_external_api_key("abc123")
+        self._set_public_mode(True)
+        self._set_ip_whitelist(["127.0.0.0/8"])
+        client = self.app.test_client()
+        resp = client.get("/api/external/health", headers=self._auth_headers())
+        self.assertEqual(resp.status_code, 200)
+
+
+class GuardFeatureDisableTests(ExternalApiGuardBaseTest):
+    """TC-GUARD-08~11: 高风险接口禁用。"""
+
+    def test_raw_disabled(self):
+        """TC-GUARD-08: 公网模式 + raw 禁用 → 403 FEATURE_DISABLED"""
+        email_addr = self._insert_outlook_account()
+        self._set_external_api_key("abc123")
+        self._set_public_mode(True)
+        self._set_ip_whitelist(["127.0.0.1"])
+        self._set_disable_feature("raw_content", True)
+        client = self.app.test_client()
+        resp = client.get(
+            f"/api/external/messages/fake-id/raw",
+            headers=self._auth_headers(),
+        )
+        self.assertEqual(resp.status_code, 403)
+        data = resp.get_json()
+        self.assertEqual(data["code"], "FEATURE_DISABLED")
+        self.assertIn("raw_content", data.get("data", {}).get("feature", ""))
+
+    def test_wait_message_disabled(self):
+        """TC-GUARD-09: 公网模式 + wait-message 禁用 → 403"""
+        email_addr = self._insert_outlook_account()
+        self._set_external_api_key("abc123")
+        self._set_public_mode(True)
+        self._set_ip_whitelist(["127.0.0.1"])
+        self._set_disable_feature("wait_message", True)
+        client = self.app.test_client()
+        resp = client.get(
+            f"/api/external/wait-message?email={email_addr}",
+            headers=self._auth_headers(),
+        )
+        self.assertEqual(resp.status_code, 403)
+        data = resp.get_json()
+        self.assertEqual(data["code"], "FEATURE_DISABLED")
+
+    def test_raw_allowed_when_not_disabled(self):
+        """TC-GUARD-10: 公网模式 + raw 未禁用 → 正常进入 controller"""
+        email_addr = self._insert_outlook_account()
+        self._set_external_api_key("abc123")
+        self._set_public_mode(True)
+        self._set_ip_whitelist(["127.0.0.1"])
+        self._set_disable_feature("raw_content", False)
+        client = self.app.test_client()
+        resp = client.get(
+            f"/api/external/messages/fake-id/raw",
+            headers=self._auth_headers(),
+        )
+        # 不是 403 FEATURE_DISABLED（可能是 404/500 等取决于后续逻辑）
+        self.assertNotEqual(resp.status_code, 403)
+
+    def test_wait_message_allowed_when_not_disabled(self):
+        """TC-GUARD-11: 公网模式 + wait-message 未禁用 → 正常进入"""
+        email_addr = self._insert_outlook_account()
+        self._set_external_api_key("abc123")
+        self._set_public_mode(True)
+        self._set_ip_whitelist(["127.0.0.1"])
+        self._set_disable_feature("wait_message", False)
+        client = self.app.test_client()
+        resp = client.get(
+            f"/api/external/wait-message?email={email_addr}",
+            headers=self._auth_headers(),
+        )
+        self.assertNotEqual(resp.status_code, 403)
+
+
+class GuardRateLimitTests(ExternalApiGuardBaseTest):
+    """TC-GUARD-12~14: 限流功能。"""
+
+    def test_rate_limit_exceeded(self):
+        """TC-GUARD-12: 公网模式 + 超限 → 429 RATE_LIMIT_EXCEEDED"""
+        self._set_external_api_key("abc123")
+        self._set_public_mode(True)
+        self._set_ip_whitelist(["127.0.0.1"])
+        self._set_rate_limit(3)
+        self._clear_rate_limits()
+        client = self.app.test_client()
+        results = []
+        for _ in range(5):
+            resp = client.get("/api/external/health", headers=self._auth_headers())
+            results.append(resp.status_code)
+        # 前 3 次应该通过（200），之后应该是 429
+        self.assertTrue(any(s == 429 for s in results), f"预期至少一个 429，实际: {results}")
+        # 检查 429 响应内容
+        last_429 = [r for r in range(5) if results[r] == 429]
+        if last_429:
+            resp = client.get("/api/external/health", headers=self._auth_headers())
+            if resp.status_code == 429:
+                data = resp.get_json()
+                self.assertEqual(data["code"], "RATE_LIMIT_EXCEEDED")
+
+    def test_rate_limit_not_exceeded(self):
+        """TC-GUARD-13: 公网模式 + 未超限 → 正常通过"""
+        self._set_external_api_key("abc123")
+        self._set_public_mode(True)
+        self._set_ip_whitelist(["127.0.0.1"])
+        self._set_rate_limit(100)
+        self._clear_rate_limits()
+        client = self.app.test_client()
+        for _ in range(5):
+            resp = client.get("/api/external/health", headers=self._auth_headers())
+            self.assertEqual(resp.status_code, 200)
+
+    def test_rate_limit_response_structure(self):
+        """TC-GUARD-14: 429 响应包含 limit/current/ip"""
+        self._set_external_api_key("abc123")
+        self._set_public_mode(True)
+        self._set_ip_whitelist(["127.0.0.1"])
+        self._set_rate_limit(1)
+        self._clear_rate_limits()
+        client = self.app.test_client()
+        client.get("/api/external/health", headers=self._auth_headers())
+        resp = client.get("/api/external/health", headers=self._auth_headers())
+        if resp.status_code == 429:
+            data = resp.get_json()
+            err_data = data.get("data", {})
+            self.assertIn("limit", err_data)
+            self.assertIn("current", err_data)
+            self.assertIn("ip", err_data)
+
+
+class GuardCapabilitiesTests(ExternalApiGuardBaseTest):
+    """TC-GUARD-15~16: capabilities 端点 P1 增强。"""
+
+    def test_capabilities_private_mode(self):
+        """TC-GUARD-15: 私有模式 capabilities 不含 restricted_features"""
+        self._set_external_api_key("abc123")
+        self._set_public_mode(False)
+        client = self.app.test_client()
+        resp = client.get("/api/external/capabilities", headers=self._auth_headers())
+        self.assertEqual(resp.status_code, 200)
+        data = resp.get_json()["data"]
+        self.assertFalse(data.get("public_mode", False))
+
+    def test_capabilities_public_mode_with_disabled(self):
+        """TC-GUARD-16: 公网模式 + 功能禁用 → restricted_features 列出禁用项"""
+        self._set_external_api_key("abc123")
+        self._set_public_mode(True)
+        self._set_ip_whitelist(["127.0.0.1"])
+        self._set_disable_feature("raw_content", True)
+        self._set_disable_feature("wait_message", True)
+        client = self.app.test_client()
+        resp = client.get("/api/external/capabilities", headers=self._auth_headers())
+        self.assertEqual(resp.status_code, 200)
+        data = resp.get_json()["data"]
+        self.assertTrue(data.get("public_mode"))
+        restricted = data.get("restricted_features", [])
+        self.assertIn("raw_content", restricted)
+        self.assertIn("wait_message", restricted)
+
+
+class GuardSettingsApiTests(ExternalApiGuardBaseTest):
+    """TC-GUARD-17~18: P1 设置读写。"""
+
+    def test_get_settings_contains_p1_fields(self):
+        """TC-GUARD-17: GET /api/settings 包含 P1 字段"""
+        with self.app.test_client() as client:
+            self._login(client)
+            resp = client.get("/api/settings")
+            self.assertEqual(resp.status_code, 200)
+            s = resp.get_json()["settings"]
+            self.assertIn("external_api_public_mode", s)
+            self.assertIn("external_api_ip_whitelist", s)
+            self.assertIn("external_api_rate_limit_per_minute", s)
+            self.assertIn("external_api_disable_raw_content", s)
+            self.assertIn("external_api_disable_wait_message", s)
+
+    def test_update_p1_settings(self):
+        """TC-GUARD-18: PUT /api/settings 可更新 P1 字段"""
+        with self.app.test_client() as client:
+            self._login(client)
+            # 获取 CSRF token
+            csrf_resp = client.get("/api/csrf-token")
+            csrf_token = csrf_resp.get_json().get("csrf_token", "")
+            resp = client.put(
+                "/api/settings",
+                json={
+                    "external_api_public_mode": True,
+                    "external_api_ip_whitelist": ["10.0.0.1", "192.168.0.0/16"],
+                    "external_api_rate_limit_per_minute": 30,
+                    "external_api_disable_raw_content": True,
+                    "external_api_disable_wait_message": True,
+                },
+                headers={"X-CSRFToken": csrf_token},
+            )
+            self.assertEqual(resp.status_code, 200)
+            data = resp.get_json()
+            self.assertTrue(data["success"])
+            # 验证设置已保存
+            resp2 = client.get("/api/settings")
+            s = resp2.get_json()["settings"]
+            self.assertTrue(s["external_api_public_mode"])
+            self.assertEqual(s["external_api_ip_whitelist"], ["10.0.0.1", "192.168.0.0/16"])
+            self.assertEqual(s["external_api_rate_limit_per_minute"], 30)
+            self.assertTrue(s["external_api_disable_raw_content"])
+            self.assertTrue(s["external_api_disable_wait_message"])

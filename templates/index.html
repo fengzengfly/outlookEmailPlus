@@ -336,6 +336,42 @@
                             </div>
                         </div>
 
+                        <!-- P1：对外 API 公网安全配置 -->
+                        <div id="externalApiAdvancedSettings" style="margin-top: 0.75rem; padding: 1rem; background: var(--bg-secondary); border-radius: 8px; border: 1px solid var(--border-light);">
+                            <h5 style="font-size: 0.85rem; font-weight: 600; margin-bottom: 0.75rem; color: var(--text-muted);">🛡️ 公网安全配置（P1）</h5>
+                            <div class="form-group">
+                                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                    <input type="checkbox" id="externalApiPublicMode">
+                                    <span class="form-label" style="margin: 0;">启用公网模式</span>
+                                </label>
+                                <div class="form-hint">关闭时（默认）仅做 API Key 鉴权；开启后额外启用 IP 白名单、限流、高风险端点禁用等安全策略。</div>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">IP 白名单 <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 400;">（仅公网模式生效，留空则不限制）</span></label>
+                                <textarea class="form-input" id="externalApiIpWhitelist" rows="2" placeholder='每行一个 IP 或 CIDR，如 192.168.1.0/24' style="font-family: monospace; font-size: 0.85rem;"></textarea>
+                                <div class="form-hint">支持精确 IP 和 CIDR 格式。每行一个，保存时自动转为 JSON 数组。</div>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">每分钟每 IP 限流 <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 400;">（仅公网模式生效）</span></label>
+                                <input type="number" class="form-input" id="externalApiRateLimit" min="1" max="10000" value="60" style="width: 120px;">
+                                <div class="form-hint">每个 IP 每分钟最大请求数（默认 60）。</div>
+                            </div>
+                            <div class="form-group">
+                                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                    <input type="checkbox" id="externalApiDisableRaw">
+                                    <span class="form-label" style="margin: 0;">禁用 raw（原始内容）端点</span>
+                                </label>
+                                <div class="form-hint">公网模式下建议禁用，防止泄露完整邮件原文。</div>
+                            </div>
+                            <div class="form-group">
+                                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                    <input type="checkbox" id="externalApiDisableWait">
+                                    <span class="form-label" style="margin: 0;">禁用 wait-message（等待新邮件）端点</span>
+                                </label>
+                                <div class="form-hint">公网模式下建议禁用，防止长连接资源耗尽（Slowloris 风险）。</div>
+                            </div>
+                        </div>
+
                         <!-- Token 刷新设置 -->
                         <div style="border-top: 1px solid var(--border-light); margin: 1.5rem 0; padding-top: 1.5rem;">
                             <h4 style="font-size: 0.95rem; font-weight: 600; margin-bottom: 1rem; color: var(--text);">🔄 Token 刷新设置</h4>

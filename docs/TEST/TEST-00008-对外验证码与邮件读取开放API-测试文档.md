@@ -12,6 +12,7 @@
   - `tests/test_external_api.py`
   - `tests/test_settings_external_api_key.py`
   - `tests/test_verification_extractor_options.py`
+  - `tests/test_ui_settings_external_api_key.py`
 
 ---
 
@@ -95,6 +96,7 @@
 3. **隔离外部网络依赖**：Graph、IMAP、时间等待统一通过 `mock` 处理，不依赖真实网络。
 4. **返回结构与 OpenAPI 对齐**：测试中必须校验 `success/code/message/data` 四元结构。
 5. **重点关注错误路径**：鉴权失败、账号不存在、无匹配邮件、无验证码、无链接、上游失败都要覆盖。
+6. **默认参数语义与 PRD 对齐**：`verification-*` 默认最近 10 分钟；`messages` / `wait-message` 不应被测试为默认 10 分钟窗口。
 
 ### 2.2 Mock 策略
 

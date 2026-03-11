@@ -19,7 +19,8 @@ from outlook_web.security.crypto import (
 # 数据库 Schema 版本（用于升级可验证/可诊断）
 # v3：对齐 PRD-00005 / FD-00005 / TDD-00005（accounts 表新增多邮箱字段：account_type/provider/imap_host/imap_port/imap_password）
 # v5：BUG-00011 P2 — Message-ID 去重防止重复推送
-DB_SCHEMA_VERSION = 5
+# v6：PRD-00008 P1 — 对外 API 限流表 + 公网模式默认配置
+DB_SCHEMA_VERSION = 6
 DB_SCHEMA_VERSION_KEY = "db_schema_version"
 DB_SCHEMA_LAST_UPGRADE_TRACE_ID_KEY = "db_schema_last_upgrade_trace_id"
 DB_SCHEMA_LAST_UPGRADE_ERROR_KEY = "db_schema_last_upgrade_error"
@@ -508,6 +509,34 @@ def init_db(database_path: Optional[str] = None):
             CREATE INDEX IF NOT EXISTS idx_telegram_push_log_pushed_at
             ON telegram_push_log(pushed_at)
             """)
+
+        # v6: 对外 API 限流表 + 公网模式默认配置（PRD-00008 P1）
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS external_api_rate_limits (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ip_address TEXT NOT NULL,
+                minute_bucket INTEGER NOT NULL,
+                request_count INTEGER NOT NULL DEFAULT 1,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(ip_address, minute_bucket)
+            )
+            """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_ext_rate_ip_bucket
+            ON external_api_rate_limits(ip_address, minute_bucket)
+            """)
+        # P1 默认配置
+        for key, default in [
+            ("external_api_public_mode", "false"),
+            ("external_api_ip_whitelist", "[]"),
+            ("external_api_rate_limit_per_minute", "60"),
+            ("external_api_disable_wait_message", "false"),
+            ("external_api_disable_raw_content", "false"),
+        ]:
+            cursor.execute(
+                "INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)",
+                (key, default),
+            )
 
         # 迁移现有明文数据为加密数据
         migrate_sensitive_data(conn)

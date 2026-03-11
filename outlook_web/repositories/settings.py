@@ -79,3 +79,42 @@ def get_external_api_key_masked(head: int = 4, tail: int = 4) -> str:
     if len(safe_value) <= head + tail:
         return "*" * len(safe_value)
     return safe_value[:head] + ("*" * (len(safe_value) - head - tail)) + safe_value[-tail:]
+
+
+# ── P1：公网模式安全配置 ──────────────────────────────
+
+
+def get_external_api_public_mode() -> bool:
+    """公网模式是否开启（默认关闭，保持 P0 受控私有行为）。"""
+    return get_setting("external_api_public_mode", "false").lower() == "true"
+
+
+def get_external_api_ip_whitelist() -> list:
+    """IP 白名单列表（JSON 数组，支持 CIDR 如 '192.168.1.0/24'）。"""
+    import json
+
+    raw = get_setting("external_api_ip_whitelist", "[]")
+    try:
+        result = json.loads(raw)
+        return result if isinstance(result, list) else []
+    except (json.JSONDecodeError, TypeError):
+        return []
+
+
+def get_external_api_rate_limit() -> int:
+    """每分钟每 IP 最大请求数（默认 60）。"""
+    try:
+        val = int(get_setting("external_api_rate_limit_per_minute", "60"))
+        return max(1, val)
+    except (ValueError, TypeError):
+        return 60
+
+
+def get_external_api_disable_wait_message() -> bool:
+    """是否禁用 wait-message 端点（默认不禁用）。"""
+    return get_setting("external_api_disable_wait_message", "false").lower() == "true"
+
+
+def get_external_api_disable_raw_content() -> bool:
+    """是否禁用 raw 端点（默认不禁用）。"""
+    return get_setting("external_api_disable_raw_content", "false").lower() == "true"

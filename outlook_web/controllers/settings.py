@@ -51,6 +51,13 @@ def api_get_settings() -> Any:
     safe_settings["external_api_key_set"] = bool(external_api_key_value)
     safe_settings["external_api_key_masked"] = _mask_secret_value(external_api_key_value) if external_api_key_value else ""
 
+    # P1：公网模式安全配置
+    safe_settings["external_api_public_mode"] = settings_repo.get_external_api_public_mode()
+    safe_settings["external_api_ip_whitelist"] = settings_repo.get_external_api_ip_whitelist()
+    safe_settings["external_api_rate_limit_per_minute"] = settings_repo.get_external_api_rate_limit()
+    safe_settings["external_api_disable_raw_content"] = settings_repo.get_external_api_disable_raw_content()
+    safe_settings["external_api_disable_wait_message"] = settings_repo.get_external_api_disable_wait_message()
+
     # Telegram 推送配置
     tg_bot_token_raw = all_settings.get("telegram_bot_token", "")
     if tg_bot_token_raw and is_encrypted(tg_bot_token_raw):
@@ -140,6 +147,68 @@ def api_update_settings() -> Any:
                 updated.append("对外 API Key（已清空）")
             else:
                 errors.append("清空对外 API Key 失败")
+
+    # P1：公网模式安全配置
+    if "external_api_public_mode" in data:
+        val = str(data["external_api_public_mode"]).lower()
+        if val in ("true", "false"):
+            if settings_repo.set_setting("external_api_public_mode", val):
+                updated.append("对外 API 公网模式")
+            else:
+                errors.append("更新公网模式失败")
+        else:
+            errors.append("公网模式必须是 true 或 false")
+
+    if "external_api_ip_whitelist" in data:
+        raw = data["external_api_ip_whitelist"]
+        if isinstance(raw, list):
+            whitelist_str = json.dumps(raw, ensure_ascii=False)
+        else:
+            whitelist_str = str(raw).strip()
+        # 简单校验 JSON 数组格式
+        try:
+            parsed = json.loads(whitelist_str)
+            if not isinstance(parsed, list):
+                errors.append("IP 白名单必须是 JSON 数组格式")
+            else:
+                if settings_repo.set_setting("external_api_ip_whitelist", whitelist_str):
+                    updated.append("对外 API IP 白名单")
+                else:
+                    errors.append("更新 IP 白名单失败")
+        except (json.JSONDecodeError, TypeError):
+            errors.append("IP 白名单格式无效（应为 JSON 数组）")
+
+    if "external_api_rate_limit_per_minute" in data:
+        try:
+            limit = int(data["external_api_rate_limit_per_minute"])
+            if limit < 1 or limit > 10000:
+                errors.append("限流阈值必须在 1-10000 之间")
+            elif settings_repo.set_setting("external_api_rate_limit_per_minute", str(limit)):
+                updated.append("对外 API 限流阈值")
+            else:
+                errors.append("更新限流阈值失败")
+        except (ValueError, TypeError):
+            errors.append("限流阈值必须是数字")
+
+    if "external_api_disable_raw_content" in data:
+        val = str(data["external_api_disable_raw_content"]).lower()
+        if val in ("true", "false"):
+            if settings_repo.set_setting("external_api_disable_raw_content", val):
+                updated.append("对外 API 禁用 raw 端点")
+            else:
+                errors.append("更新禁用 raw 端点失败")
+        else:
+            errors.append("禁用 raw 端点必须是 true 或 false")
+
+    if "external_api_disable_wait_message" in data:
+        val = str(data["external_api_disable_wait_message"]).lower()
+        if val in ("true", "false"):
+            if settings_repo.set_setting("external_api_disable_wait_message", val):
+                updated.append("对外 API 禁用 wait-message 端点")
+            else:
+                errors.append("更新禁用 wait-message 端点失败")
+        else:
+            errors.append("禁用 wait-message 端点必须是 true 或 false")
 
     # 更新刷新周期
     if "refresh_interval_days" in data:

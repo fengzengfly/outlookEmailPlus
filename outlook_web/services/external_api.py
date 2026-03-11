@@ -527,6 +527,7 @@ def wait_for_message(
     if poll_interval <= 0 or poll_interval > timeout_seconds:
         raise InvalidParamError("poll_interval 参数无效")
 
+    # 记录进入等待接口时的时间戳，避免把请求开始前已存在的旧邮件误判成“新到达”。
     baseline_timestamp = int(time.time())
     start = time.time()
     last_error: Optional[ExternalApiError] = None

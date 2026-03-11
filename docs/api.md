@@ -64,8 +64,8 @@ P0 阶段不建议再新增以下业务接口：
 
 | 阶段 | 类型 | 是否已定义为独立接口 | 说明 |
 |------|------|----------------------|------|
-| P1 | 公网模式、IP 白名单、限流 | 否 | 更适合加在鉴权层和安全层 |
-| P1 | 动态上游探测 | 否 | 优先增强现有 `/health`、`/account-status` 返回字段 |
+| P1 | 公网模式、IP 白名单、限流 | 已实现（v1.1） | 安全守卫层 `external_api_guard.py` |
+| P1 | 高风险接口禁用（raw/wait-message） | 已实现（v1.1） | 设置页可动态开关 |
 | P2 | `wait-message` 解耦 | 否 | 先做后台轮询与缓存，再决定是否新增异步接口 |
 | P2 | 多 API Key / 范围授权 | 否 | 优先落在设置与鉴权模型，不急于新增公开路径 |
 
@@ -104,6 +104,20 @@ X-API-Key: your-api-key
 - 不支持 query 参数中的 `api_key`
 - 未配置 `external_api_key` 时，统一返回 `403 API_KEY_NOT_CONFIGURED`
 
+### 2.2.1 P1 公网安全层（v1.1 新增）
+
+在 API Key 鉴权之后，额外叠加以下安全控制。**仅在"公网模式"开启时生效**，默认关闭（与 P0 行为完全一致）。
+
+| 配置项 | 键名 | 默认值 | 说明 |
+|--------|------|--------|------|
+| 公网模式 | `external_api_public_mode` | `false` | 开启后激活 IP 白名单、限流、功能禁用 |
+| IP 白名单 | `external_api_ip_whitelist` | `[]` | JSON 数组，支持精确 IP 和 CIDR（如 `192.168.0.0/16`）；为空则不限制 |
+| 限流阈值 | `external_api_rate_limit_per_minute` | `60` | 每 IP 每分钟最大请求数 |
+| 禁用 raw | `external_api_disable_raw_content` | `false` | 禁止 `/messages/{id}/raw` 端点 |
+| 禁用 wait-message | `external_api_disable_wait_message` | `false` | 禁止 `/wait-message` 端点 |
+
+在设置页 → 对外开放 API → 🛡️ 公网安全配置 中可动态修改，无需重启。
+
 ### 2.3 通用成功响应
 
 ```json
@@ -140,6 +154,9 @@ X-API-Key: your-api-key
 | `PROXY_ERROR` | `502` | 代理连接失败 |
 | `UPSTREAM_READ_FAILED` | `502` | Graph / IMAP 均读取失败 |
 | `INTERNAL_ERROR` | `500` | 服务内部错误 |
+| `IP_NOT_ALLOWED` | `403` | 当前 IP 不在白名单中（公网模式） |
+| `FEATURE_DISABLED` | `403` | 功能在公网模式下已禁用 |
+| `RATE_LIMIT_EXCEEDED` | `429` | 请求频率超限（公网模式） |
 
 ### 2.6 通用查询参数
 

@@ -12,6 +12,7 @@ from outlook_web.errors import build_error_payload
 from outlook_web.repositories import accounts as accounts_repo
 from outlook_web.repositories import groups as groups_repo
 from outlook_web.security.auth import api_key_required, login_required
+from outlook_web.security.external_api_guard import external_api_guards
 from outlook_web.services import email_delete as email_delete_service
 from outlook_web.services import external_api as external_api_service
 from outlook_web.services import graph as graph_service
@@ -633,6 +634,7 @@ def _external_error_response(exc: external_api_service.ExternalApiError):
 
 
 @api_key_required
+@external_api_guards()
 def api_external_get_messages() -> Any:
     try:
         args = _parse_external_common_args()
@@ -679,6 +681,7 @@ def api_external_get_messages() -> Any:
 
 
 @api_key_required
+@external_api_guards()
 def api_external_get_latest_message() -> Any:
     try:
         args = _parse_external_common_args()
@@ -718,6 +721,7 @@ def api_external_get_latest_message() -> Any:
 
 
 @api_key_required
+@external_api_guards()
 def api_external_get_message_detail(message_id: str) -> Any:
     try:
         args = _parse_external_common_args()
@@ -755,6 +759,7 @@ def api_external_get_message_detail(message_id: str) -> Any:
 
 
 @api_key_required
+@external_api_guards(feature="raw_content")
 def api_external_get_message_raw(message_id: str) -> Any:
     try:
         args = _parse_external_common_args()
@@ -801,6 +806,7 @@ def api_external_get_message_raw(message_id: str) -> Any:
 
 
 @api_key_required
+@external_api_guards()
 def api_external_get_verification_code() -> Any:
     try:
         args = _parse_external_common_args(default_since_minutes=10)
@@ -861,6 +867,7 @@ def api_external_get_verification_code() -> Any:
 
 
 @api_key_required
+@external_api_guards()
 def api_external_get_verification_link() -> Any:
     try:
         args = _parse_external_common_args(default_since_minutes=10)
@@ -903,6 +910,7 @@ def api_external_get_verification_link() -> Any:
 
 
 @api_key_required
+@external_api_guards(feature="wait_message")
 def api_external_wait_message() -> Any:
     try:
         args = _parse_external_common_args()
