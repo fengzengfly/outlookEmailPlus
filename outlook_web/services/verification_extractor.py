@@ -49,6 +49,38 @@ DEFAULT_LINK_KEYWORDS = [
     "validation",
 ]
 
+# 链接语境提权：仅与"验证/激活账户/确认邮箱"强相关的完整短语
+# 必须带对象名词（email/account/邮箱/账户），避免 "confirm your order" 等交易邮件误触
+LINK_CONTEXT_PHRASES = [
+    "verify your email",
+    "verify your account",
+    "verify your address",
+    "confirm your email",
+    "confirm your account",
+    "confirm your address",
+    "activate your email",
+    "activate your account",
+    "email verification",
+    "account verification",
+    "验证您的邮箱",
+    "验证你的邮箱",
+    "验证您的账户",
+    "验证你的账户",
+    "验证您的账号",
+    "验证你的账号",
+    "确认您的邮箱",
+    "确认你的邮箱",
+    "确认您的账户",
+    "确认你的账户",
+    "激活您的账户",
+    "激活你的账户",
+    "激活您的邮箱",
+    "激活你的邮箱",
+    "邮箱验证",
+    "账号验证",
+    "账户验证",
+]
+
 
 class HTMLTextExtractor(HTMLParser):
     """HTML 转纯文本提取器"""
@@ -490,7 +522,9 @@ def extract_verification_info_with_options(
     - links
     - formatted
     - match_source
-    - confidence
+    - confidence          (向后兼容：code/link 中较高者)
+    - code_confidence      (high=关键词命中或调用方指定code_regex命中, low=仅 fallback 或未命中)
+    - link_confidence      (high=链接含验证关键词或邮件正文含强验证语境短语, low=任意首链接且无验证语境)
 
     注意：该函数主要服务外部 API，不主动抛“未找到验证码/链接”的异常，方便上层按需映射错误码。
     """
@@ -513,20 +547,40 @@ def extract_verification_info_with_options(
         match_source = "all"
 
     code_re = _build_code_regex(code_regex=code_regex, code_length=code_length)
+    # 仅 code_regex 具有判别力，code_length 只是宽度约束，不自动提权
+    caller_directed_code = bool(code_regex)
 
+    # ── 验证码提取 & 置信度 ──
     verification_code = _smart_extract_code_by_keywords(source_text, code_re)
-    confidence = "high" if verification_code else "low"
+    code_confidence: str = "high" if verification_code else "low"
     if not verification_code:
         verification_code = _fallback_extract_code(source_text, code_re)
+        # 调用方显式指定了 code_regex（强判别力正则）→ 提取命中即视为可信
+        if verification_code and caller_directed_code:
+            code_confidence = "high"
 
+    # ── 链接提取 & 置信度 ──
     links = extract_links(f"{subject} {content} {html_content}".strip())
     prefer_keywords = prefer_link_keywords or DEFAULT_LINK_KEYWORDS
     verification_link = _pick_preferred_link(links, prefer_keywords)
-    if verification_link and confidence != "high":
+
+    link_confidence: str = "low"
+    if verification_link:
+        # 优先检查 URL 本身是否含验证关键词
         for kw in prefer_keywords:
             if kw and kw.lower() in verification_link.lower():
-                confidence = "high"
+                link_confidence = "high"
                 break
+        # URL 不含关键词时，检查邮件正文/主题是否有强验证语境短语
+        if link_confidence != "high":
+            full_text_lower = f"{subject} {content}".lower()
+            for phrase in LINK_CONTEXT_PHRASES:
+                if phrase.lower() in full_text_lower:
+                    link_confidence = "high"
+                    break
+
+    # 总 confidence 向后兼容：取 code / link 中较高者
+    confidence = "high" if code_confidence == "high" or link_confidence == "high" else "low"
 
     parts: List[str] = []
     if verification_code:
@@ -542,4 +596,6 @@ def extract_verification_info_with_options(
         "formatted": formatted,
         "match_source": match_source,
         "confidence": confidence,
+        "code_confidence": code_confidence,
+        "link_confidence": link_confidence,
     }

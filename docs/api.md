@@ -8,7 +8,7 @@
 
 - 本地化部署
 - 单实例
-- 单可信调用方
+- 多调用方受控接入
 - 内网或受控访问环境
 
 当前版本不建议直接公网暴露。原因见：
@@ -41,12 +41,12 @@
 
 ### 1.2 配套但不是新建开放接口的后台接口
 
-以下接口用于管理员配置 `external_api_key`，属于现有后台接口扩展，不属于开放接口本身：
+以下接口用于管理员配置对外 API 鉴权模型，属于现有后台接口扩展，不属于开放接口本身：
 
 | 方法 | 路径 | 登录要求 | 说明 |
 |------|------|----------|------|
-| `GET` | `/api/settings` | 需要后台登录 | 返回 `external_api_key_set`、`external_api_key_masked` |
-| `PUT` | `/api/settings` | 需要后台登录 | 保存或清空 `external_api_key` |
+| `GET` | `/api/settings` | 需要后台登录 | 返回 legacy `external_api_key_*` 字段，以及 `external_api_keys` 多 Key 列表与当日调用统计 |
+| `PUT` | `/api/settings` | 需要后台登录 | 保存或清空 legacy `external_api_key`，或整体替换 `external_api_keys` 多 Key 配置 |
 
 ### 1.3 当前不建议继续新增的接口
 
@@ -55,9 +55,7 @@ P0 阶段不建议再新增以下业务接口：
 - 邮件删除、标记已读、移动邮件等写接口
 - 附件下载、附件元数据开放接口
 - Webhook / 回调通知接口
-- 多调用方 API Key 管理接口
-
-原因是当前目标是“受控私有接入闭环”，不是开放平台化扩张。
+原因是当前目标仍是“受控私有接入闭环”，不是开放平台化扩张。
 
 ### 1.4 后续阶段可能补充的能力
 
@@ -68,7 +66,7 @@ P0 阶段不建议再新增以下业务接口：
 | P1 | 公网模式、IP 白名单、限流 | 已实现（v1.1） | 安全守卫层 `external_api_guard.py` |
 | P1 | 高风险接口禁用（raw/wait-message） | 已实现（v1.1） | 设置页可动态开关 |
 | P2 | `wait-message` 异步探测解耦 | 已实现（v1.2） | `mode=async` + `/api/external/probe/<id>` |
-| P2 | 多 API Key / 范围授权 | 否 | 优先落在设置与鉴权模型，不急于新增公开路径 |
+| P2 | 多 API Key / 范围授权 / 调用方审计 | 已实现（v1.4） | 仍落在设置与鉴权模型，不新增公开路径 |
 
 结论：
 
@@ -103,7 +101,19 @@ X-API-Key: your-api-key
 
 - 仅支持 Header 中的 `X-API-Key`
 - 不支持 query 参数中的 `api_key`
-- 未配置 `external_api_key` 时，统一返回 `403 API_KEY_NOT_CONFIGURED`
+- 未配置 legacy `external_api_key` 且未配置任何启用中的 `external_api_keys` 时，统一返回 `403 API_KEY_NOT_CONFIGURED`
+
+### 2.2.2 P2 多 API Key 与邮箱范围授权（v1.4 新增）
+
+- 支持同时配置多个 `external_api_keys`
+- 每个 Key 可配置：
+  - `name`
+  - `enabled`
+  - `allowed_emails`
+- `allowed_emails=[]` 表示该 Key 不限制邮箱范围
+- `allowed_emails` 非空时，仅允许访问名单中的邮箱
+- 使用超出范围的邮箱时，统一返回 `403 EMAIL_SCOPE_FORBIDDEN`
+- legacy `external_api_key` 仍保留兼容；未迁移前可继续使用
 
 ### 2.2.1 P1 公网安全层（v1.1 新增）
 
@@ -150,8 +160,8 @@ X-API-Key: your-api-key
 | `INVALID_PARAM` | `400` | 参数不合法 |
 | `ACCOUNT_NOT_FOUND` | `404` | 指定邮箱账号不存在 |
 | `MAIL_NOT_FOUND` | `404` | 未找到匹配邮件 |
-| `VERIFICATION_CODE_NOT_FOUND` | `404` | 未找到验证码 |
-| `VERIFICATION_LINK_NOT_FOUND` | `404` | 未找到验证链接 |
+| `VERIFICATION_CODE_NOT_FOUND` | `404` | 未找到可信验证码（含低置信度被拦截的场景） |
+| `VERIFICATION_LINK_NOT_FOUND` | `404` | 未找到可信验证链接（含低置信度被拦截的场景） |
 | `PROXY_ERROR` | `502` | 代理连接失败 |
 | `UPSTREAM_READ_FAILED` | `502` | Graph / IMAP 均读取失败 |
 | `INTERNAL_ERROR` | `500` | 服务内部错误 |
@@ -376,7 +386,7 @@ curl -H "X-API-Key: your-api-key" \
 >
 > `/api/external/messages/{message_id}/raw` 返回未经过滤的邮件原始内容（完整 MIME 正文），可能包含敏感信息、附件二进制数据或恶意脚本。
 >
-> **当前版本定位**：仅面向受控私有接入场景（单实例、单可信调用方、内网部署）。
+> **当前版本定位**：仅面向受控私有接入场景（单实例、多调用方受控接入、内网部署）。
 >
 > **风险点**：
 > - 原始内容无字段级脱敏，调用方须自行处理展示安全
@@ -400,6 +410,9 @@ curl -H "X-API-Key: your-api-key" \
 特别说明：
 
 - 未显式传入 `since_minutes` 时，该接口默认只扫描最近 `10` 分钟的邮件
+- **置信度门控（v1.5）**：仅当验证码通过关键词智能提取命中（`code_confidence=high`）时才视为成功。  
+  若邮件中无验证码关键词上下文、仅 fallback 匹配到普通数字（`code_confidence=low`），接口将返回 `404 VERIFICATION_CODE_NOT_FOUND`，而非此前的 `200 OK`。  
+  调用方可通过 `from_contains`、`subject_contains`、`code_regex` 等参数缩窄匹配范围，提升命中准确率。
 
 成功响应示例：
 
@@ -410,11 +423,13 @@ curl -H "X-API-Key: your-api-key" \
   "message": "success",
   "data": {
     "verification_code": "123456",
-    "verification_link": "",
+    "verification_link": null,
     "links": [],
     "formatted": "123456",
     "match_source": "content",
     "confidence": "high",
+    "code_confidence": "high",
+    "link_confidence": "low",
     "email": "user@outlook.com",
     "matched_email_id": "msg-1",
     "from": "noreply@example.com",
@@ -425,10 +440,20 @@ curl -H "X-API-Key: your-api-key" \
 }
 ```
 
+> 注：低置信度字段在成功响应中会被置为 `null`（非空字符串）。仅高置信度命中的字段会返回实际值。
+
+响应字段说明：
+
+| 字段 | 说明 |
+|------|------|
+| `confidence` | 向后兼容总置信度（`code_confidence` 与 `link_confidence` 中较高者） |
+| `code_confidence` | 验证码置信度：`high`=关键词上下文命中或调用方指定 `code_regex` 精确匹配命中；`low`=仅 fallback 扫描命中或未命中 |
+| `link_confidence` | 验证链接置信度：`high`=链接 URL 含验证关键词（verify/confirm/activate/validation）或邮件正文含强验证语境短语（需带对象名词如 email/account）；`low`=任意首链接且无验证语境 |
+
 失败场景：
 
 - 没有命中邮件：`404 MAIL_NOT_FOUND`
-- 命中邮件但未提取到验证码：`404 VERIFICATION_CODE_NOT_FOUND`
+- 命中邮件但未提取到**可信**验证码：`404 VERIFICATION_CODE_NOT_FOUND`
 
 ### 5.2 `GET /api/external/verification-link`
 
@@ -437,6 +462,8 @@ curl -H "X-API-Key: your-api-key" \
 特别说明：
 
 - 未显式传入 `since_minutes` 时，该接口默认只扫描最近 `10` 分钟的邮件
+- **置信度门控（v1.5）**：仅当链接 URL 包含验证关键词（verify/confirm/activate/validation），或邮件正文/主题含强验证语境短语（如 "verify your email"、"confirm your account"、"activate your account"、"邮箱验证" 等带对象名词的完整短语）时才视为成功（`link_confidence=high`）。  
+  若邮件中仅包含普通跳转链接且无验证语境（`link_confidence=low`），接口将返回 `404 VERIFICATION_LINK_NOT_FOUND`。
 
 成功响应示例：
 
@@ -446,13 +473,15 @@ curl -H "X-API-Key: your-api-key" \
   "code": "OK",
   "message": "success",
   "data": {
-    "verification_code": "",
+    "verification_code": null,
     "verification_link": "https://example.com/verify?token=abc",
     "links": [
       "https://example.com/verify?token=abc"
     ],
     "formatted": "https://example.com/verify?token=abc",
     "confidence": "high",
+    "code_confidence": "low",
+    "link_confidence": "high",
     "email": "user@outlook.com",
     "matched_email_id": "msg-1",
     "from": "noreply@example.com",
@@ -466,7 +495,7 @@ curl -H "X-API-Key: your-api-key" \
 失败场景：
 
 - 没有命中邮件：`404 MAIL_NOT_FOUND`
-- 命中邮件但未提取到验证链接：`404 VERIFICATION_LINK_NOT_FOUND`
+- 命中邮件但未提取到**可信**验证链接：`404 VERIFICATION_LINK_NOT_FOUND`
 
 ### 5.3 `GET /api/external/wait-message`
 
@@ -578,15 +607,18 @@ curl -H "X-API-Key: your-api-key" \
     "service": "outlook-email-plus",
     "version": "0.1.0-draft",
     "server_time_utc": "2026-03-08T12:00:00Z",
-    "database": "ok"
+    "database": "ok",
+    "upstream_probe_ok": true,
+    "last_probe_at": "2026-03-12T12:00:00Z",
+    "last_probe_error": ""
   }
 }
 ```
 
 注意：
 
-- 该接口当前偏向“服务与数据库存活”
-- 不代表上游 Graph / IMAP 一定真实可读
+- 该接口仍以“服务与数据库存活”为主
+- 但会补充返回实例级最近一次真实上游读取探测摘要
 
 ### 6.2 `GET /api/external/capabilities`
 
@@ -640,7 +672,11 @@ curl -H "X-API-Key: your-api-key" \
     "status": "active",
     "last_refresh_at": null,
     "preferred_method": "graph",
-    "can_read": true
+    "can_read": true,
+    "upstream_probe_ok": true,
+    "probe_method": "Graph API",
+    "last_probe_at": "2026-03-12T12:00:00Z",
+    "last_probe_error": ""
   }
 }
 ```
@@ -648,7 +684,7 @@ curl -H "X-API-Key: your-api-key" \
 注意：
 
 - `can_read=true` 仅表示基础配置字段存在
-- 不等于已经完成真实拉信探测
+- `upstream_probe_ok` 才表示最近一次真实拉信探测结果
 
 ## 七、管理员配置接口说明
 
@@ -662,6 +698,9 @@ curl -H "X-API-Key: your-api-key" \
 |------|------|
 | `external_api_key_set` | 是否已配置开放 API Key |
 | `external_api_key_masked` | 脱敏后的 Key 展示值 |
+| `external_api_keys` | 多 API Key 列表（含 `id`、`name`、`enabled`、`allowed_emails`、`api_key_masked`、当日调用统计） |
+| `external_api_keys_count` | 多 API Key 数量 |
+| `external_api_multi_key_set` | 是否已配置多 API Key |
 
 ### 7.2 `PUT /api/settings`
 
@@ -672,17 +711,21 @@ curl -H "X-API-Key: your-api-key" \
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | `external_api_key` | string | 设置新的开放 API Key；传空字符串表示清空 |
+| `external_api_keys` | array | 整体替换多 API Key 配置；元素支持 `id`、`name`、`api_key`、`enabled`、`allowed_emails` |
 
 说明：
 
 - 配置写入后不会明文回显
 - 实际存储会走现有敏感配置加密逻辑
+- `PUT /api/settings` 采用事务式提交；当请求中任一设置项校验失败时，本次所有变更都会回滚
+- `external_api_keys` 采用“全量替换”语义，删除某个 Key 时不再提交该项即可
+- 更新已有 Key 时可继续提交 `api_key_masked` 占位值，后端会保留原 Key
 
 ## 八、接入建议
 
 推荐接入顺序：
 
-1. 管理员登录后台，通过 `/api/settings` 配置 `external_api_key`
+1. 管理员登录后台，通过 `/api/settings` 配置 legacy `external_api_key` 或 `external_api_keys`
 2. 调用 `/api/external/health` 检查基础可用性
 3. 调用 `/api/external/account-status?email=...` 确认目标邮箱存在
 4. 视业务选择 `/messages`、`/verification-code`、`/verification-link`
@@ -691,9 +734,9 @@ curl -H "X-API-Key: your-api-key" \
 ## 九、已知限制
 
 - 当前仅适合受控私有接入，不建议直接公网暴露
-- 当前只有单 `external_api_key`，默认具备读取本实例全部已配置邮箱的能力边界
 - `wait-message` 为同步轮询实现，不适合高并发公网场景
 - `/api/external/health` 与 `/api/external/account-status` 当前仍偏轻量，不等价于真实上游探测
+- 设置页前端已提供 `external_api_keys` 的 JSON 文本编辑入口，可直接维护多 Key、启停状态和邮箱范围授权
 
 ## 十、当前接口问题与处理口径
 
@@ -719,21 +762,21 @@ curl -H "X-API-Key: your-api-key" \
 - P0/P1 不为此单独新增查询接口
 - 如未来确实需要全局消息索引，再考虑在新版本中调整
 
-### 10.2 `health` 与 `account-status` 当前是轻量自检，不是真实探测
+### 10.2 `health` 与 `account-status` 当前是“轻量自检 + 最近探测摘要”
 
 现状：
 
-- `/api/external/health` 主要反映服务和数据库是否存活
-- `/api/external/account-status` 主要反映账号是否存在、基础配置是否完整
+- `/api/external/health` 主要反映服务和数据库是否存活，并返回实例级最近探测摘要
+- `/api/external/account-status` 主要反映账号是否存在、基础配置是否完整，并返回该账号最近探测摘要
 
 问题：
 
-- 它们不能证明 Graph / IMAP 在当前时刻一定可读
+- 它们返回的是“最近一次探测结果”，不是持续实时健康流
 
 处理口径：
 
-- 当前文档明确按“轻量自检”解释这两个接口
-- P1 优先扩展字段，不优先新增同类接口
+- 当前文档明确按“轻量自检 + 最近探测摘要”解释这两个接口
+- 如需更强诊断能力，再单独演进 probe 服务
 
 ### 10.3 `/raw` 接口敏感度高
 
@@ -768,42 +811,44 @@ curl -H "X-API-Key: your-api-key" \
 - P1 若进入公网模式，应优先禁用或限制
 - P2 再考虑是否替换为异步模型
 
-### 10.5 单 API Key 权限边界较粗
+### 10.5 多 API Key 已支持，但配额仍以审计统计为主
 
 现状：
 
-- 当前只有一个 `external_api_key`
-- 默认可读取本实例全部已配置邮箱
+- 当前已支持多个 `external_api_keys`
+- 每个 Key 可限制 `allowed_emails`
+- 审计日志已记录 `consumer_id` / `consumer_name`
+- `/api/settings` 已返回调用方当日聚合统计
 
 问题：
 
-- 不适合多调用方或复杂权限边界
+- 目前仍未实现“超阈值即拒绝”的硬性调用方限额拦截
+- 暂无独立开发者门户或专门配额管理页面
 
 处理口径：
 
-- 当前仅按单可信调用方场景验收
-- P2 再做多 API Key 和范围授权
+- 当前已满足多调用方受控接入与基础配额审计
+- 如需硬性 quota / 套餐化能力，再单独扩展平台层
 
 ## 十一、后续阶段接口文档预留
 
-本节用于说明后续如果进入 P1/P2，接口文档应优先怎么演进。
+本节用于说明后续如果继续进入更深的 P1/P2，接口文档应优先怎么演进。
 
 ### 11.1 P1：优先扩展现有接口字段
 
 #### `GET /api/external/health`
 
-建议后续增加但当前不承诺的字段：
+当前已实现字段：
 
 | 字段 | 含义 |
 |------|------|
 | `upstream_probe_ok` | 上游读取链路最近一次探测是否成功 |
 | `last_probe_at` | 最近一次探测时间 |
 | `last_probe_error` | 最近一次探测错误摘要 |
-| `public_mode` | 当前是否处于公网模式 |
 
 #### `GET /api/external/capabilities`
 
-建议后续增加但当前不承诺的字段：
+当前已实现字段：
 
 | 字段 | 含义 |
 |------|------|
@@ -813,7 +858,7 @@ curl -H "X-API-Key: your-api-key" \
 
 #### `GET /api/external/account-status`
 
-建议后续增加但当前不承诺的字段：
+当前已实现字段：
 
 | 字段 | 含义 |
 |------|------|
@@ -849,8 +894,7 @@ P1 更推荐补的是控制能力，而不是新增更多邮件接口：
 
 当前不提前承诺新增以下路径：
 
-- 异步等待接口
-- 多调用方管理接口
-- 配额管理接口
+- 更细粒度的开发者门户接口
+- 硬性 quota 套餐化管理接口
 
 如果未来必须新增，建议进入新版本或新增专门的管理域，而不是继续把所有能力堆在 `/api/external/*` 主业务路径下。

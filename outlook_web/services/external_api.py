@@ -8,7 +8,9 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from outlook_web.audit import log_audit
 from outlook_web.repositories import accounts as accounts_repo
+from outlook_web.repositories import external_api_keys as external_api_keys_repo
 from outlook_web.repositories import groups as groups_repo
+from outlook_web.security.auth import get_external_api_consumer
 from outlook_web.services import graph as graph_service
 from outlook_web.services import imap as imap_service
 from outlook_web.services.imap_generic import get_email_detail_imap_generic, get_emails_imap_generic
@@ -65,6 +67,11 @@ class ProxyError(ExternalApiError):
 class UpstreamReadFailedError(ExternalApiError):
     code = "UPSTREAM_READ_FAILED"
     status = 502
+
+
+class EmailScopeForbiddenError(ExternalApiError):
+    code = "EMAIL_SCOPE_FORBIDDEN"
+    status = 403
 
 
 def ok(data: Any = None, *, message: str = "success") -> Dict[str, Any]:
@@ -126,6 +133,25 @@ def _extract_email_address(value: str) -> str:
         return str(value or "")
 
 
+def get_current_external_api_consumer() -> Dict[str, Any]:
+    return get_external_api_consumer() or {}
+
+
+def ensure_external_email_access(email_addr: str) -> None:
+    consumer = get_current_external_api_consumer()
+    allowed_emails = [str(item or "").strip().lower() for item in (consumer.get("allowed_emails") or [])]
+    target_email = str(email_addr or "").strip().lower()
+    if allowed_emails and target_email not in allowed_emails:
+        raise EmailScopeForbiddenError(
+            "当前 API Key 无权访问该邮箱",
+            data={
+                "email": email_addr,
+                "consumer_id": consumer.get("id"),
+                "consumer_name": consumer.get("name"),
+            },
+        )
+
+
 def _build_message_summary(email_addr: str, item: Dict[str, Any], *, method: str) -> Dict[str, Any]:
     raw_from = item.get("from")
     if isinstance(raw_from, dict):
@@ -183,6 +209,187 @@ def require_account(email_addr: str) -> Dict[str, Any]:
     if not account:
         raise AccountNotFoundError("账号不存在", data={"email": email_addr})
     return account
+
+
+def _preferred_probe_method(account: Dict[str, Any]) -> str:
+    account_type = (account.get("account_type") or "outlook").strip().lower()
+    return "imap_generic" if account_type == "imap" else "graph"
+
+
+def _account_can_read(account: Dict[str, Any]) -> bool:
+    status = (account.get("status") or "active").strip().lower()
+    if status == "disabled":
+        return False
+    account_type = (account.get("account_type") or "outlook").strip().lower()
+    if account_type == "imap":
+        return bool((account.get("imap_host") or "").strip()) and bool((account.get("imap_password") or "").strip())
+    return bool((account.get("client_id") or "").strip()) and bool((account.get("refresh_token") or "").strip())
+
+
+def _probe_now_iso() -> str:
+    return _utcnow().replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def _probe_summary_from_row(row: Any) -> Dict[str, Any]:
+    if not row:
+        return {
+            "upstream_probe_ok": None,
+            "probe_method": "",
+            "last_probe_at": "",
+            "last_probe_error": "",
+        }
+    return {
+        "upstream_probe_ok": None if row["probe_ok"] is None else bool(row["probe_ok"]),
+        "probe_method": row["probe_method"] or "",
+        "last_probe_at": row["last_probe_at"] or "",
+        "last_probe_error": row["last_probe_error"] or "",
+    }
+
+
+def get_upstream_probe_summary(scope_type: str, scope_key: str) -> Dict[str, Any]:
+    from outlook_web.db import get_db
+
+    db = get_db()
+    row = db.execute(
+        """
+        SELECT scope_type, scope_key, email_addr, probe_method, probe_ok, last_probe_at, last_probe_error
+        FROM external_upstream_probes
+        WHERE scope_type = ? AND scope_key = ?
+        """,
+        (scope_type, scope_key),
+    ).fetchone()
+    return _probe_summary_from_row(row)
+
+
+def _is_probe_summary_fresh(summary: Dict[str, Any], cache_ttl_seconds: int) -> bool:
+    last_probe_at = summary.get("last_probe_at") or ""
+    if not last_probe_at:
+        return False
+    probed_at = _parse_datetime(last_probe_at)
+    if not probed_at:
+        return False
+    age_seconds = (_utcnow() - probed_at).total_seconds()
+    return age_seconds <= max(0, int(cache_ttl_seconds))
+
+
+def record_upstream_probe_summary(
+    *,
+    scope_type: str,
+    scope_key: str,
+    email_addr: str,
+    probe_ok: Optional[bool],
+    probe_method: str = "",
+    last_probe_error: str = "",
+    last_probe_at: Optional[str] = None,
+) -> Dict[str, Any]:
+    from outlook_web.db import get_db
+
+    db = get_db()
+    probe_at = last_probe_at or _probe_now_iso()
+    db.execute(
+        """
+        INSERT INTO external_upstream_probes
+            (scope_type, scope_key, email_addr, probe_method, probe_ok, last_probe_at, last_probe_error, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        ON CONFLICT(scope_type, scope_key)
+        DO UPDATE SET
+            email_addr = excluded.email_addr,
+            probe_method = excluded.probe_method,
+            probe_ok = excluded.probe_ok,
+            last_probe_at = excluded.last_probe_at,
+            last_probe_error = excluded.last_probe_error,
+            updated_at = CURRENT_TIMESTAMP
+        """,
+        (
+            scope_type,
+            scope_key,
+            email_addr or "",
+            probe_method or "",
+            None if probe_ok is None else int(bool(probe_ok)),
+            probe_at,
+            str(last_probe_error or "")[:500],
+        ),
+    )
+    db.commit()
+    return {
+        "upstream_probe_ok": probe_ok,
+        "probe_method": probe_method or "",
+        "last_probe_at": probe_at,
+        "last_probe_error": str(last_probe_error or "")[:500],
+    }
+
+
+def _probe_error_message(exc: Exception) -> str:
+    if isinstance(exc, ExternalApiError):
+        return str(exc.message or exc.code or "探测失败")
+    return str(exc)[:500] or type(exc).__name__
+
+
+def probe_account_upstream(
+    account: Dict[str, Any],
+    *,
+    folder: str = "inbox",
+    cache_ttl_seconds: int = 60,
+    force: bool = False,
+) -> Dict[str, Any]:
+    email_addr = str(account.get("email") or "").strip()
+    preferred_method = _preferred_probe_method(account)
+    cached = get_upstream_probe_summary("account", email_addr) if email_addr else {}
+    if email_addr and (not force) and _is_probe_summary_fresh(cached, cache_ttl_seconds):
+        return cached
+
+    last_probe_at = _probe_now_iso()
+    try:
+        _emails, method = list_messages_for_external(email_addr=email_addr, folder=folder, top=1, skip=0)
+        summary = record_upstream_probe_summary(
+            scope_type="account",
+            scope_key=email_addr,
+            email_addr=email_addr,
+            probe_ok=True,
+            probe_method=str(method or preferred_method),
+            last_probe_error="",
+            last_probe_at=last_probe_at,
+        )
+    except Exception as exc:
+        summary = record_upstream_probe_summary(
+            scope_type="account",
+            scope_key=email_addr,
+            email_addr=email_addr,
+            probe_ok=False,
+            probe_method=preferred_method,
+            last_probe_error=_probe_error_message(exc),
+            last_probe_at=last_probe_at,
+        )
+    record_upstream_probe_summary(
+        scope_type="instance",
+        scope_key="__instance__",
+        email_addr=email_addr,
+        probe_ok=summary.get("upstream_probe_ok"),
+        probe_method=summary.get("probe_method") or preferred_method,
+        last_probe_error=summary.get("last_probe_error") or "",
+        last_probe_at=summary.get("last_probe_at") or last_probe_at,
+    )
+    return summary
+
+
+def _pick_instance_probe_account() -> Optional[Dict[str, Any]]:
+    candidates = accounts_repo.load_accounts()
+    for account in candidates:
+        if _account_can_read(account):
+            return account
+    return None
+
+
+def probe_instance_upstream(*, cache_ttl_seconds: int = 60, force: bool = False) -> Dict[str, Any]:
+    cached = get_upstream_probe_summary("instance", "__instance__")
+    if (not force) and (cached.get("last_probe_at") or ""):
+        return cached
+
+    account = _pick_instance_probe_account()
+    if not account:
+        return cached
+
+    return probe_account_upstream(account, cache_ttl_seconds=cache_ttl_seconds, force=force)
 
 
 def list_messages_for_external(
@@ -497,6 +704,16 @@ def get_verification_result(
         code_length=code_length,
         code_source=code_source,
     )
+
+    # ── 可信度门控：非高置信度结果不作为 external API 成功输出 ──
+    if extracted.get("code_confidence") != "high":
+        extracted["verification_code"] = None
+    if extracted.get("link_confidence") != "high":
+        extracted["verification_link"] = None
+    # 重算 formatted（与清零后的值保持一致）
+    parts = [v for v in (extracted.get("verification_code"), extracted.get("verification_link")) if v]
+    extracted["formatted"] = " ".join(parts) if parts else None
+
     extracted["email"] = email_addr
     extracted["matched_email_id"] = message_id
     extracted["from"] = detail.get("from_address") or latest_summary.get("from_address") or ""
@@ -802,6 +1019,18 @@ def audit_external_api_access(
     details: Dict[str, Any] | None = None,
 ):
     safe_details: Dict[str, Any] = {"endpoint": endpoint, "status": status}
+    consumer = get_current_external_api_consumer()
+    if consumer:
+        safe_details.update(
+            {
+                "consumer_id": consumer.get("id"),
+                "consumer_key": consumer.get("consumer_key"),
+                "consumer_name": consumer.get("name"),
+                "consumer_source": consumer.get("source"),
+            }
+        )
+        if consumer.get("allowed_emails"):
+            safe_details["consumer_allowed_emails"] = consumer.get("allowed_emails")
     if details:
         # 避免日志中输出敏感信息（如 API Key）
         safe_details.update(details)
@@ -812,3 +1041,13 @@ def audit_external_api_access(
         details_text = str(safe_details)
 
     log_audit(action, "external_api", email_addr, details_text)
+    try:
+        if consumer:
+            external_api_keys_repo.record_external_api_consumer_usage(
+                consumer_key=str(consumer.get("consumer_key") or ""),
+                consumer_name=str(consumer.get("name") or ""),
+                endpoint=endpoint,
+                status=status,
+            )
+    except Exception:
+        pass
