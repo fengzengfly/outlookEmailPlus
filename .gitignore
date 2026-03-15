@@ -34,6 +34,12 @@ data/
 # 内部文档（不开源）
 PRD/
 我们的文档/
+docs/
+AGENTS.md
+CONTRIBUTING.md
+SECURITY.md
+tests/layout-system/README.md
+TODO.md
 
 # Node.js
 node_modules/
