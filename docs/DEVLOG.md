@@ -1,5 +1,42 @@
 # DEVLOG
 
+## v1.9.2 - 紧凑模式发布与刷新提示增强
+
+发布日期：2026-03-24
+
+### 新增功能
+
+- 新增账号管理“简洁模式”视图：账号列表支持高密度展示、分组条、验证码/最新邮件摘要列，以及标准/简洁模式之间的选中状态同步，适合批量运营场景。
+- 新增账号备注轻量编辑链路：标准列表与简洁模式都可直接打开备注弹窗，通过独立 `PATCH` 接口只更新 `remark` 字段，支持新增、修改和清空备注而不要求重新填写账号凭据。
+- 新增临时邮箱富内容保真能力：临时邮箱详情页可解析 `cid:` 内联图片、data URL 与远程图片地址，验证码截图类邮件可直接在前端查看。
+- 新增按账号类型生成的刷新失败建议：刷新错误弹窗会根据 Outlook OAuth、Gmail IMAP、通用 IMAP 等不同场景给出差异化排障提示。
+
+### 修复
+
+- 修复 Outlook 刷新链路回归，手动刷新、重试失败与全量刷新会明确限制在 Outlook OAuth 账号范围内，避免 IMAP 账号误走 Graph 刷新流程并污染日志。
+- 修复 Outlook.com Basic Auth 失败时的错误反馈，对邮箱详情、验证码提取和 external API 场景统一返回明确的 OAuth 导入提示。
+- 修复旧版浏览器内置 OAuth 取 Token 流程导致的初始化与交互问题，移除失效的 `/api/oauth/*` 路由及前端入口，避免继续暴露不可用流程。
+- 修复备注编辑、多语言文案与账号面板展示的一致性问题，统一“备注”入口名称，补齐弹窗相关国际化文案，并避免 IMAP 账号显示误导性的 Token 过期状态。
+
+### 重要变更
+
+- 版本号从 `1.9.1` 提升到 `1.9.2`，应用 UI 侧边栏版本显示、系统/对外 API 返回的 `version` 字段继续由 `outlook_web.__version__` 统一驱动。
+- 当前仓库不是 Tauri 工程，不包含 `Cargo.toml`、`package.json`、MSI 或 NSIS 构建链路；本次发布继续沿用仓库既有的 Docker 镜像 tar 与源码 zip 作为正式产物。
+- `README.md`、`README.en.md` 与 `registration-mail-pool-api.en.md` 已按当前实现同步更新，对外说明统一到受控 external API 与当前部署口径。
+
+### 测试/验证
+
+- 自动化测试：`python -m unittest discover -s tests -v`
+  - 结果：`Ran 617 tests in 158.232s`
+  - 状态：全部通过
+  - 备注：Playwright 相关 2 个浏览器用例因环境缺少 `playwright` / `werkzeug` 依赖而按预期跳过。
+- 构建验证：`docker build -t outlook-email-plus:v1.9.2 .`
+  - 状态：成功
+  - 镜像摘要：`sha256:d7aa37eabd966be0789815742434bec45472197ff6bfc1861db1859d02051346`
+- 发布产物：
+  - `dist/outlook-email-plus-v1.9.2-docker.tar`（174,048,768 bytes）
+  - `dist/outlookEmailPlus-v1.9.2-src.zip`（1,078,317 bytes）
+
 ## v1.8.0 - 邮箱池与受控对外池 API 首次交付
 
 发布日期：2026-03-17
