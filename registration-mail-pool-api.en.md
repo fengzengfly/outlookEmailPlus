@@ -1,58 +1,60 @@
-# Registration Worker Integration and External Mail Pool API
+# Registration Worker Integration and External API Guide
 
 [中文文档](./注册与邮箱池接口文档.md) | [English Version](./registration-mail-pool-api.en.md)
 
 ## Overview
 
-This document describes the externally exposed mail-pool APIs for registration workers and script-based integrations.
+This document describes the `/api/external/*` endpoints currently implemented and exposed for registration workers, scripts, and third-party integrations.
 
-**Service purpose**: provide controlled mailbox claiming, result callbacks, and pool status visibility for registration workflows.
+Service goals:
 
-**Data format**: all requests and responses use JSON.
+- mailbox pool claim, release, and completion callbacks
+- verification-code, verification-link, message-reading, and wait-for-message capabilities
+- service health, capability discovery, and account readability checks
 
-**CORS**: cross-origin requests are supported.
+Current contract:
 
-**Current contract**: only `/api/external/pool/*` is available in the current version. The old anonymous `/api/pool/*` endpoints have been removed.
+- the current version uses `/api/external/*`
+- the old anonymous `/api/pool/*` endpoints have been removed
+- real registration flows usually need more than `/api/external/pool/*`; they also use the verification and mail-reading endpoints
 
 ---
 
-## Authentication and General Rules
+## Authentication and Access Rules
 
-### Getting an API Key
-
-Contact the system administrator to obtain an API key and send it in the request header:
+All `/api/external/*` endpoints require:
 
 ```text
 X-API-Key: YOUR_API_KEY
 ```
 
-**Test environment**: contact the administrator for a test key. Rate limit: 100 requests per minute.
+Two key models are supported:
 
-### Preconditions
+1. legacy single key: `settings.external_api_key`
+2. enabled keys from `external_api_keys`
 
-Before calling the APIs, confirm all of the following:
+Additional rules:
 
-1. `pool_external_enabled=true` is enabled on the server
-2. Your API key is enabled and has `pool_access=true`
-3. If public mode is enabled, your caller must also satisfy the IP whitelist, feature switches, and rate limits
+- mail-reading endpoints are scoped by `email`. If the current key has `allowed_emails`, only those mailboxes may be accessed.
+- `/api/external/pool/*` requires both:
+  `pool_external_enabled=true` and the current key having `pool_access=true`
+- in public mode, endpoints may also be limited by IP allowlist, rate limiting, and feature switches
+- the current public-mode switches can disable:
+  `raw_content`, `wait_message`, `pool_claim_random`, `pool_claim_release`, `pool_claim_complete`, `pool_stats`
+- no browser session, cookies, or CSRF token is required
 
-### Calling Model
+---
 
-- These are service-to-service APIs
-- No browser login session is required
-- No cookies are required
-- No CSRF token is required
-- All requests use `X-API-Key`
+## Standard Response Format
 
-### Standard Response Format
-
-All endpoints follow the same response structure:
+Success response:
 
 ```json
 {
   "success": true,
-  "data": { "...": "..." },
-  "message": "Operation completed successfully"
+  "code": "OK",
+  "message": "success",
+  "data": {}
 }
 ```
 
@@ -62,487 +64,437 @@ Failure response:
 {
   "success": false,
   "code": "ERROR_CODE",
-  "message": "Error description"
+  "message": "Error description",
+  "data": null
 }
 ```
 
-### Time Field Format
+Time fields use ISO 8601, for example:
 
-All time fields use ISO 8601 format: `YYYY-MM-DDTHH:MM:SSZ`
+```text
+2026-03-26T12:00:00Z
+```
 
 ---
 
-## API Endpoint List
+## Endpoint Summary
 
-### Quick Start
+### System and Discovery
 
-Registration worker integrations usually only need these four endpoints:
-
-| Endpoint | Purpose | Required |
+| Endpoint | Purpose | Recommended |
 | --- | --- | --- |
-| `POST /api/external/pool/claim-random` | Claim a mailbox | Yes |
-| `POST /api/external/pool/claim-complete` | Submit task completion | Yes |
-| `POST /api/external/pool/claim-release` | Release a mailbox | Yes |
-| `GET /api/external/pool/stats` | View pool status | Optional |
+| `GET /api/external/health` | service health check | Yes |
+| `GET /api/external/capabilities` | inspect currently available capabilities | Yes |
+| `GET /api/external/account-status` | inspect account existence and readability | Optional |
 
----
+### Mail Reading and Verification
 
-## 1. Claim a Mailbox
-
-### Basics
-
-```text
-POST /api/external/pool/claim-random
-Authentication required: Yes
-```
-
-### Request Example
-
-```bash
-curl -X POST https://api.example.com/api/external/pool/claim-random \
-  -H "X-API-Key: YOUR_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "caller_id": "register-worker-1",
-    "task_id": "job-20260317-0001",
-    "provider": "outlook"
-  }'
-```
-
-### Parameters
-
-| Parameter | Type | Required | Description |
-| --- | --- | --- | --- |
-| `caller_id` | string | Yes | Caller identifier. Use a stable business or machine identifier such as `register-worker-1` or `register-cluster-a`. |
-| `task_id` | string | Yes | Unique ID of the current registration task, such as `job-20260317-0001` or `order-928371`. |
-| `provider` | string | No | Mail provider filter. Set `outlook` to claim Outlook mailboxes only. |
-
-### Usage Recommendations
-
-- Use a stable `caller_id` to identify a worker instance, host, or node
-- Make `task_id` unique for every single job
-- If you run different task types, prefer explicit provider filtering to reduce accidental claims
-
-### Success Response Example
-
-```json
-{
-  "success": true,
-  "data": {
-    "account_id": 12,
-    "email": "demo@outlook.com",
-    "claim_token": "clm_xxxxx",
-    "lease_expires_at": "2026-03-17T10:00:00Z"
-  },
-  "message": "Mailbox claimed successfully"
-}
-```
-
-### Response Fields
-
-| Field | Type | Description |
+| Endpoint | Purpose | Recommended |
 | --- | --- | --- |
-| `account_id` | integer | Account ID. Required when reporting completion or release. |
-| `email` | string | Mailbox address. |
-| `claim_token` | string | Claim token. Required in follow-up callbacks. |
-| `lease_expires_at` | string | Lease expiration time. Submit completion or release before it expires. |
+| `GET /api/external/messages` | list message summaries | Optional |
+| `GET /api/external/messages/latest` | get the latest matching message | Yes |
+| `GET /api/external/messages/{message_id}` | get message details | Optional |
+| `GET /api/external/messages/{message_id}/raw` | get raw message content | Optional for debugging |
+| `GET /api/external/verification-code` | extract a verification code | Common |
+| `GET /api/external/verification-link` | extract a verification link | Common |
+| `GET /api/external/wait-message` | wait for a new message | Common |
+| `GET /api/external/probe/{probe_id}` | query async wait status | Needed for `mode=async` |
 
-### Failure Response Example
+### Mail Pool
 
-```json
-{
-  "success": false,
-  "code": "NO_AVAILABLE_ACCOUNT",
-  "message": "No eligible mailbox is currently available in the pool"
-}
-```
-
----
-
-## 2. Complete a Task and Submit the Result
-
-### Basics
-
-```text
-POST /api/external/pool/claim-complete
-Authentication required: Yes
-```
-
-### Request Example
-
-```bash
-curl -X POST https://api.example.com/api/external/pool/claim-complete \
-  -H "X-API-Key: YOUR_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "account_id": 12,
-    "claim_token": "clm_xxxxx",
-    "caller_id": "register-worker-1",
-    "task_id": "job-20260317-0001",
-    "result": "success",
-    "detail": "Registration completed successfully"
-  }'
-```
-
-### Parameters
-
-| Parameter | Type | Required | Description |
-| --- | --- | --- | --- |
-| `account_id` | integer | Yes | Account ID returned by the claim operation. |
-| `claim_token` | string | Yes | Claim token returned by the claim operation. |
-| `caller_id` | string | Yes | Must match the `caller_id` used when claiming. |
-| `task_id` | string | Yes | Must match the `task_id` used when claiming. |
-| `result` | string | Yes | Task result. See the available values below. |
-| `detail` | string | No | Additional details such as failure reason, target site, or risk-control behavior. |
-
-### Allowed `result` Values and Final Status Mapping
-
-| `result` value | Meaning | Final mailbox status | Typical use case |
-| --- | --- | --- | --- |
-| `success` | Registration succeeded and the account was consumed | `used` | Task completed successfully |
-| `verification_timeout` | Verification code was never received | `cooldown` | No code arrived for a long time; retry later |
-| `provider_blocked` | The provider blocked or restricted the account | `frozen` | Provider risk control, suspension, or limitation |
-| `credential_invalid` | Credentials are no longer valid | `retired` | Mailbox password or credentials are invalid |
-| `network_error` | Temporary network or infrastructure problem | `available` | Safe to return to the pool and retry quickly |
-
-### Callback Rules
-
-- Report `success` only after the task is truly finished
-- If the task is cancelled or never really starts, use `claim-release` instead of `claim-complete`
-- Do not map every failure to `network_error`, or bad mailboxes will keep going back to the pool
-
-### Success Response Example
-
-```json
-{
-  "success": true,
-  "data": {
-    "account_id": 12,
-    "pool_status": "used"
-  },
-  "message": "Task result submitted successfully"
-}
-```
-
-### Failure Response Example
-
-```json
-{
-  "success": false,
-  "code": "TOKEN_MISMATCH",
-  "message": "The claim_token does not match"
-}
-```
+| Endpoint | Purpose | Recommended |
+| --- | --- | --- |
+| `POST /api/external/pool/claim-random` | claim a mailbox | Common |
+| `POST /api/external/pool/claim-release` | release a mailbox | Common |
+| `POST /api/external/pool/claim-complete` | submit the task result | Common |
+| `GET /api/external/pool/stats` | inspect pool counts | Optional |
 
 ---
 
-## 3. Release a Mailbox
+## Recommended Integration Flow
 
-### Basics
-
-```text
-POST /api/external/pool/claim-release
-Authentication required: Yes
-```
-
-### Request Example
-
-```bash
-curl -X POST https://api.example.com/api/external/pool/claim-release \
-  -H "X-API-Key: YOUR_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "account_id": 12,
-    "claim_token": "clm_xxxxx",
-    "caller_id": "register-worker-1",
-    "task_id": "job-20260317-0001",
-    "reason": "Task cancelled"
-  }'
-```
-
-### Parameters
-
-| Parameter | Type | Required | Description |
-| --- | --- | --- | --- |
-| `account_id` | integer | Yes | Account ID returned by the claim operation. |
-| `claim_token` | string | Yes | Claim token returned by the claim operation. |
-| `caller_id` | string | Yes | Must match the original claim request. |
-| `task_id` | string | Yes | Must match the original claim request. |
-| `reason` | string | No | Reason for releasing the mailbox. |
-
-### Typical Release Scenarios
-
-- The job was cancelled
-- The job never actually started
-- An upstream dependency is missing and the mailbox should be returned without being counted as a failure
-
-### Success Response Example
-
-```json
-{
-  "success": true,
-  "data": {
-    "account_id": 12,
-    "pool_status": "available"
-  },
-  "message": "Mailbox released back to the pool"
-}
-```
-
-Notes:
-
-- This endpoint is for pool observation only and does not change state
-- Use it for monitoring, capacity checks, and validation, not for high-frequency polling
+1. `GET /api/external/health`
+2. `GET /api/external/capabilities`
+3. `POST /api/external/pool/claim-random`
+4. read the returned `email`
+5. call `verification-code` / `verification-link` / `wait-message`
+6. call `claim-complete` on success
+7. call `claim-release` if the task is abandoned
 
 ---
 
-## 4. View Pool Status
+## System and Discovery Endpoints
 
-### Basics
+### `GET /api/external/health`
 
-```text
-GET /api/external/pool/stats
-Authentication required: Yes
-```
+Purpose: inspect service, database, and instance-level upstream probe status.
 
-### Request Example
+Request example:
 
 ```bash
-curl -X GET https://api.example.com/api/external/pool/stats \
+curl -X GET https://api.example.com/api/external/health \
   -H "X-API-Key: YOUR_API_KEY"
 ```
 
-### Success Response Example
+Important response fields:
 
-```json
-{
-  "success": true,
-  "data": {
-    "pool_counts": {
-      "available": 850,
-      "claimed": 120,
-      "used": 20,
-      "cooldown": 5,
-      "frozen": 3,
-      "retired": 2
-    }
-  },
-  "message": "Query completed successfully"
-}
-```
+- `status`
+- `service`
+- `version`
+- `server_time_utc`
+- `database`
+- `upstream_probe_ok`
+- `last_probe_at`
+- `last_probe_error`
+
+### `GET /api/external/capabilities`
+
+Purpose: inspect currently available capabilities.
+
+Response fields:
+
+- `public_mode`
+- `features`
+- `restricted_features`
+
+The current `features` list focuses on mail-reading capabilities:
+
+- `message_list`
+- `message_detail`
+- `raw_content`
+- `verification_code`
+- `verification_link`
+- `wait_message`
+
+### `GET /api/external/account-status`
+
+Query parameters:
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `email` | string | Yes | mailbox address to inspect |
+
+Important response fields:
+
+- `exists`
+- `account_type`
+- `provider`
+- `group_id`
+- `status`
+- `last_refresh_at`
+- `preferred_method`
+- `can_read`
+- `upstream_probe_ok`
+- `probe_method`
+- `last_probe_at`
+- `last_probe_error`
 
 ---
 
-## Error Handling
+## Shared Mail Query Parameters
 
-### HTTP Status Codes
+These parameters apply to most mail-reading endpoints:
 
-| Status Code | Description |
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `email` | string | Yes | mailbox address |
+| `folder` | string | No | `inbox` / `junkemail` / `deleteditems`, default `inbox` |
+| `skip` | integer | No | default `0` |
+| `top` | integer | No | range `1-50`, default `20` |
+| `from_contains` | string | No | fuzzy match against sender |
+| `subject_contains` | string | No | fuzzy match against subject |
+| `since_minutes` | integer | No | only search mail from the last N minutes, must be greater than 0 |
+
+Notes:
+
+- if the mailbox came from the pool, use the `email` returned by `claim-random`
+- the current external read API is email-based, not claim-based
+
+---
+
+## Mail and Verification Endpoints
+
+### `GET /api/external/messages`
+
+Purpose: return message summaries.
+
+Response fields:
+
+- `emails`
+- `count`
+- `has_more`
+
+### `GET /api/external/messages/latest`
+
+Purpose: return the latest matching message summary.
+
+### `GET /api/external/messages/{message_id}`
+
+Purpose: return message details.
+
+Important response fields:
+
+- `id`
+- `email_address`
+- `from_address`
+- `to_address`
+- `subject`
+- `content`
+- `html_content`
+- `raw_content`
+- `timestamp`
+- `created_at`
+- `has_html`
+- `method`
+
+### `GET /api/external/messages/{message_id}/raw`
+
+Purpose: return raw message content.
+
+Notes:
+
+- mainly for debugging, custom parsing, and special-site compatibility
+- may be disabled in public mode
+
+### `GET /api/external/verification-code`
+
+Purpose: extract a verification code from matching mail.
+
+Additional parameters:
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `code_length` | string | No | restrict expected code length |
+| `code_regex` | string | No | custom regex |
+| `code_source` | string | No | `subject` / `content` / `html` / `all`, default `all` |
+
+Notes:
+
+- if `since_minutes` is omitted, the current implementation defaults to the last `10` minutes
+- only high-confidence codes are returned as successful results
+
+### `GET /api/external/verification-link`
+
+Purpose: extract a verification link from matching mail.
+
+Notes:
+
+- if `since_minutes` is omitted, the current implementation defaults to the last `10` minutes
+- only high-confidence links are returned as successful results
+
+### `GET /api/external/wait-message`
+
+Purpose: wait for a matching message that appears after the request begins.
+
+Additional parameters:
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `timeout_seconds` | integer | No | range `1-120`, default `30` |
+| `poll_interval` | integer | No | must be greater than `0` and not exceed `timeout_seconds`, default `5` |
+| `mode` | string | No | `sync` or `async`, default `sync` |
+
+Behavior:
+
+- `mode=sync`: block until a new matching message is found, then return the message summary
+- `mode=async`: return `probe_id` and HTTP `202`
+
+### `GET /api/external/probe/{probe_id}`
+
+Purpose: query a probe created by `wait-message?mode=async`.
+
+Statuses:
+
+- `pending`
+- `matched`
+- `timeout`
+- `error`
+
+---
+
+## Pool Endpoints
+
+### `POST /api/external/pool/claim-random`
+
+Request body:
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `caller_id` | string | Yes | caller instance, node, or worker identity |
+| `task_id` | string | Yes | unique task ID |
+| `provider` | string | No | provider filter, for example `outlook` |
+
+Current implementation notes:
+
+- the current pool API supports filtering only by `provider`
+- `outlook.com`, `hotmail.com`, `live.com`, and `live.cn` all map to `provider=outlook`
+- the current external pool API does not support extra filtering by domain, group, or tags
+
+Success response fields:
+
+- `account_id`
+- `email`
+- `claim_token`
+- `lease_expires_at`
+
+When no mailbox is available, the current implementation returns:
+
+- HTTP `200`
+- response body with `success=false`
+- `code=NO_AVAILABLE_ACCOUNT`
+
+### `POST /api/external/pool/claim-release`
+
+Request body:
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `account_id` | integer | Yes | account ID returned by the claim operation |
+| `claim_token` | string | Yes | token returned by the claim operation |
+| `caller_id` | string | Yes | must exactly match the claim request |
+| `task_id` | string | Yes | must exactly match the claim request |
+| `reason` | string | No | release reason |
+
+### `POST /api/external/pool/claim-complete`
+
+Request body:
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `account_id` | integer | Yes | account ID returned by the claim operation |
+| `claim_token` | string | Yes | token returned by the claim operation |
+| `caller_id` | string | Yes | must exactly match the claim request |
+| `task_id` | string | Yes | must exactly match the claim request |
+| `result` | string | Yes | result enum, see table below |
+| `detail` | string | No | extra detail |
+
+`result` to pool-state mapping:
+
+| `result` | Meaning | Final `pool_status` |
+| --- | --- | --- |
+| `success` | registration succeeded and the mailbox was consumed | `used` |
+| `verification_timeout` | no verification code arrived in time | `cooldown` |
+| `provider_blocked` | provider-side block or restriction | `frozen` |
+| `credential_invalid` | invalid credentials | `retired` |
+| `network_error` | temporary network issue, safe to retry quickly | `available` |
+
+Current implementation notes:
+
+- `success` marks the mailbox as globally `used`
+- the current version does not support project-scoped reuse of the same mailbox
+
+### `GET /api/external/pool/stats`
+
+Purpose: return counts for each pool state.
+
+Response fields:
+
+- `pool_counts.available`
+- `pool_counts.claimed`
+- `pool_counts.used`
+- `pool_counts.cooldown`
+- `pool_counts.frozen`
+- `pool_counts.retired`
+
+---
+
+## Important Behavioral Notes
+
+### Lease Expiration
+
+In the current implementation, an expired claim does not immediately return to `available`.
+
+Actual behavior:
+
+1. the mailbox first moves from `claimed` to `cooldown`
+2. a background maintenance task later restores it from `cooldown` to `available`
+
+Default values:
+
+- `pool_default_lease_seconds = 600`
+- `pool_cooldown_seconds = 86400`
+
+### Callback Parameters Must Match Exactly
+
+For `claim-release` and `claim-complete`, the following fields must exactly match the original claim:
+
+- `account_id`
+- `claim_token`
+- `caller_id`
+- `task_id`
+
+### `wait-message` Only Returns New Mail
+
+The sync `wait-message` endpoint returns only a matching message that appears after the request begins. Older matching messages are not treated as new arrivals.
+
+---
+
+## Common Error Codes
+
+| Error Code | Typical Meaning |
 | --- | --- |
-| 200 | Request succeeded |
-| 400 | Invalid request parameters |
-| 401 | Unauthorized, missing or invalid API key |
-| 403 | Forbidden |
-| 404 | Resource not found |
-| 429 | Rate limit exceeded |
-| 500 | Internal server error |
-
-### Common Error Responses
-
-#### Missing API Key
-
-```json
-{
-  "success": false,
-  "code": "UNAUTHORIZED",
-  "message": "Send X-API-Key: YOUR_API_KEY in the request header"
-}
-```
-
-#### Rate Limit Exceeded
-
-```json
-{
-  "success": false,
-  "code": "RATE_LIMIT_EXCEEDED",
-  "message": "Rate limit exceeded. Please retry later"
-}
-```
-
-#### Feature Disabled
-
-```json
-{
-  "success": false,
-  "code": "FEATURE_DISABLED",
-  "message": "Feature external_pool is currently disabled"
-}
-```
-
-#### API Key Has No Pool Permission
-
-```json
-{
-  "success": false,
-  "code": "FORBIDDEN",
-  "message": "The current API key is not allowed to access the external pool"
-}
-```
-
-#### IP Not Allowed in Public Mode
-
-```json
-{
-  "success": false,
-  "code": "IP_NOT_ALLOWED",
-  "message": "The current IP is not in the allowlist"
-}
-```
-
-#### No Mailbox Available
-
-```json
-{
-  "success": false,
-  "code": "NO_AVAILABLE_ACCOUNT",
-  "message": "No eligible mailbox is currently available in the pool"
-}
-```
-
-#### `claim_token` Does Not Match
-
-```json
-{
-  "success": false,
-  "code": "TOKEN_MISMATCH",
-  "message": "The claim_token does not match"
-}
-```
-
----
-
-## Usage Limits
-
-### Rate Limits
-
-- Only enforced when public mode is enabled
-- Applied as a unified per-IP minute bucket across claim / release / complete / stats
-- Default limit is `60` requests per minute, and the effective value comes from `external_api_rate_limit_per_minute`
-
-### Lease Timeout
-
-After claiming a mailbox, you must submit a completion or release request before `lease_expires_at`. Expired claims are automatically returned to the pool.
-
-### Recommended Retry Strategy
-
-- When receiving `429`, wait 1 second before retrying
-- When receiving `NO_AVAILABLE_ACCOUNT`, wait 5 to 10 seconds before retrying
-- Exponential backoff is recommended
-
----
-
-## Business Flow
-
-```text
-Import mailbox (add_to_pool=true)
-         ↓
-Mailbox enters the pool (status=available)
-         ↓
-Registration worker calls claim-random
-         ↓
-Registration worker performs the task
-         ↓
-    ┌────┴────┐
-    ↓         ↓
-Success/Fail  Abort midway
-    ↓         ↓
-claim-complete  claim-release
-    ↓         ↓
-Status updated   Mailbox returns to pool
-```
+| `UNAUTHORIZED` | missing or invalid API key |
+| `API_KEY_NOT_CONFIGURED` | no usable API key is configured on the server |
+| `EMAIL_SCOPE_FORBIDDEN` | the current key cannot access this mailbox |
+| `FORBIDDEN` | the current key cannot access the pool |
+| `FEATURE_DISABLED` | the capability is disabled in public mode |
+| `IP_NOT_ALLOWED` | the current IP is not in the allowlist |
+| `RATE_LIMIT_EXCEEDED` | the current IP exceeded the rate limit |
+| `INVALID_PARAM` | invalid request parameter |
+| `ACCOUNT_NOT_FOUND` | mailbox account does not exist |
+| `ACCOUNT_ACCESS_FORBIDDEN` | mailbox exists but cannot currently be read |
+| `MAIL_NOT_FOUND` | no matching mail was found |
+| `VERIFICATION_CODE_NOT_FOUND` | no high-confidence verification code was extracted |
+| `VERIFICATION_LINK_NOT_FOUND` | no high-confidence verification link was extracted |
+| `UPSTREAM_READ_FAILED` | Graph / IMAP read failed |
+| `PROXY_ERROR` | proxy connection failed |
+| `NO_AVAILABLE_ACCOUNT` | no eligible mailbox is currently available in the pool |
+| `TOKEN_MISMATCH` | `claim_token` does not match |
+| `CALLER_MISMATCH` | `caller_id` or `task_id` does not match the claim record |
+| `NOT_CLAIMED` | the mailbox is not currently in `claimed` state |
 
 ---
 
 ## FAQ
 
-### Q1: The account was imported, but the registration worker cannot claim it
+### Q1: Why is the pool API alone not enough for a registration project?
 
-**Possible reasons**:
+Because most registration projects also need:
 
-1. `add_to_pool=true` was not set during import.
-2. The account status is not `active` or it is not in `available`.
+- `verification-code`
+- `verification-link`
+- `wait-message`
 
-**Solution**: check the import parameters and make sure the account was added to the pool correctly.
+### Q2: Can `provider=outlook` distinguish `hotmail.com` from `outlook.com`?
 
-Also check:
+No. In the current implementation, those Microsoft domains all map to the same `provider=outlook`.
 
-3. Whether `pool_external_enabled` is enabled
-4. Whether the current API key has `pool_access=true`
-5. Whether the current IP is included in the allowlist when public mode is enabled
+### Q3: What happens if I claim a mailbox and never send a callback?
 
-### Q2: Why do I get a parameter mismatch error during callback
+The mailbox stays `claimed`, then moves to `cooldown` after lease expiration, and later returns to `available` after the cooldown window.
 
-**Reason**: `account_id`, `claim_token`, `caller_id`, and `task_id` must exactly match the values returned by the claim operation.
+### Q4: Can the same mailbox be reused in another project after `success`?
 
-**Solution**: the registration worker must store the original claim response and send it back without modification.
+Not in the current version. `success` marks the mailbox as globally `used`.
 
-### Q3: What happens if I forget to submit a callback after claiming
+### Q5: Why does `NO_AVAILABLE_ACCOUNT` still use HTTP 200?
 
-**Impact**: the mailbox remains in `claimed` status and cannot be allocated to other tasks until the lease expires or it is released.
-
-**Recommendation**:
-
-- Call `claim-complete` for both successful and failed tasks.
-- Call `claim-release` when abandoning the task midway.
-
-### Q4: What happens if all failures are reported as `network_error`
-
-**Impact**: invalid mailboxes may keep returning to the pool and get assigned repeatedly, wasting resources.
-
-**Recommendation**: choose the correct `result` value based on the real failure reason.
-
-### Q5: Why can’t the old `/api/pool/*` endpoints be used anymore?
-
-**Reason**: the old anonymous endpoints were removed. The current version only exposes controlled external APIs for pool operations.
-
-**Migration**:
-
-- `/api/pool/claim-random` → `/api/external/pool/claim-random`
-- `/api/pool/claim-complete` → `/api/external/pool/claim-complete`
-- `/api/pool/claim-release` → `/api/external/pool/claim-release`
-- `/api/pool/stats` → `/api/external/pool/stats`
-
-Also migrate the request header to `X-API-Key`.
-
----
-
-## Contact
-
-- Feedback: [Submit an Issue]
-
----
-
-## Changelog
-
-### v1.0.0 (2026-03-17)
-
-- Initial release
-- Support for mailbox claim, completion callback, release, and status query
+That is the current implementation behavior. Integrators must check `success` and `code`, not only the HTTP status.
 
 ---
 
 ## Migration Notes
 
-Anonymous `/api/pool/*` endpoints have been removed. Use the controlled external endpoints instead:
+If you still use older scripts, migrate as follows:
 
-- `/api/external/pool/claim-random`
-- `/api/external/pool/claim-complete`
-- `/api/external/pool/claim-release`
-- `/api/external/pool/stats`
+1. move old `/api/pool/*` calls to `/api/external/pool/*`
+2. send `X-API-Key` for all external requests
+3. add mail-reading calls to the registration flow:
+   `verification-code` / `verification-link` / `wait-message`
+4. explicitly handle `403`, `429`, and `NO_AVAILABLE_ACCOUNT`
 
-If you still have old worker scripts, complete the following migration:
+---
 
-1. Move the path to `/api/external/pool/*`
-2. Replace the auth header with `X-API-Key`
-3. Add handling for `403` and `429`
-4. Verify `pool_external_enabled` and `pool_access` before rollout
+## Version Note
+
+This document describes the external API behavior already implemented in the current repository, not future planned APIs.
