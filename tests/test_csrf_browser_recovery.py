@@ -14,11 +14,104 @@ except Exception:
     PLAYWRIGHT_AVAILABLE = False
 
 
+_UNSAFE_BROWSER_PORTS = {
+    1,
+    7,
+    9,
+    11,
+    13,
+    15,
+    17,
+    19,
+    20,
+    21,
+    22,
+    23,
+    25,
+    37,
+    42,
+    43,
+    53,
+    77,
+    79,
+    87,
+    95,
+    101,
+    102,
+    103,
+    104,
+    109,
+    110,
+    111,
+    113,
+    115,
+    117,
+    119,
+    123,
+    135,
+    137,
+    139,
+    143,
+    161,
+    179,
+    389,
+    427,
+    465,
+    512,
+    513,
+    514,
+    515,
+    526,
+    530,
+    531,
+    532,
+    540,
+    548,
+    554,
+    556,
+    563,
+    587,
+    601,
+    636,
+    989,
+    990,
+    993,
+    995,
+    1719,
+    1720,
+    1723,
+    2049,
+    3659,
+    4045,
+    5060,
+    5061,
+    6000,
+    6566,
+    6665,
+    6666,
+    6667,
+    6668,
+    6669,
+    6697,
+    10080,
+}
+
+
 class _LiveServerThread(threading.Thread):
     def __init__(self, app):
         super().__init__(daemon=True)
-        self._server = make_server("127.0.0.1", 0, app)
-        self.port = int(self._server.server_port)
+        self._server = None
+        self.port = None
+        for _ in range(20):
+            server = make_server("127.0.0.1", 0, app)
+            port = int(server.server_port)
+            if port not in _UNSAFE_BROWSER_PORTS:
+                self._server = server
+                self.port = port
+                break
+            server.server_close()
+        if self._server is None or self.port is None:
+            raise RuntimeError("failed to allocate a browser-safe test port")
 
     def run(self):
         self._server.serve_forever()
@@ -80,7 +173,9 @@ class CsrfBrowserRecoveryTests(unittest.TestCase):
     def _account_exists(self, email_addr: str) -> bool:
         conn = self.module.create_sqlite_connection()
         try:
-            row = conn.execute("SELECT 1 FROM accounts WHERE email = ? LIMIT 1", (email_addr,)).fetchone()
+            row = conn.execute(
+                "SELECT 1 FROM accounts WHERE email = ? LIMIT 1", (email_addr,)
+            ).fetchone()
             return row is not None
         finally:
             conn.close()
@@ -109,7 +204,10 @@ class CsrfBrowserRecoveryTests(unittest.TestCase):
             page.goto(f"{self.base_url}/login")
             page.fill("#password", "testpass123")
             page.click("#loginBtn")
-            page.wait_for_url(re.compile(r".*/$"))
+            # 该用例的关注点是「CSRF 过期后自动重试一次」；
+            # 登录跳转本身在 CI/全量用例并发资源竞争时可能略慢，默认 30s 偶发超时会导致用例抖动。
+            # 因此这里显式放宽等待时间，降低偶发环境波动对主断言的干扰。
+            page.wait_for_url(re.compile(r".*/$"), timeout=60_000)
             page.wait_for_load_state("networkidle")
             page.locator('.nav-item[data-page="mailbox"]').click()
             page.wait_for_load_state("networkidle")
@@ -134,7 +232,9 @@ class CsrfBrowserRecoveryTests(unittest.TestCase):
                 account_line,
             )
 
-            page.locator("#toast-container .toast.success").filter(has_text="导入完成").wait_for(timeout=15000)
+            page.locator("#toast-container .toast.success").filter(
+                has_text="导入完成"
+            ).wait_for(timeout=15000)
             page.wait_for_function(
                 """(targetEmail) => {
                     const cards = Array.from(document.querySelectorAll('.account-card .account-email'));
