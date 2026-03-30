@@ -2295,10 +2295,10 @@ ${details}
                 indicator.style.cssText = `
                     position: fixed;
                     bottom: 24px;
-                    right: 24px;
+                    left: 24px;
                     background-color: #28a745;
                     color: white;
-                    padding: 8px 16px;
+                    padding: 6px 14px;
                     border-radius: 20px;
                     font-size: 12px;
                     font-weight: 500;
@@ -2308,6 +2308,7 @@ ${details}
                     align-items: center;
                     gap: 8px;
                     cursor: pointer;
+                    user-select: none;
                 `;
                 indicator.innerHTML = `<span style="animation: pulse 1.5s infinite;">🔄</span> ${translateAppTextLocal('轮询中')}`;
                 indicator.onclick = () => {

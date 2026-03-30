@@ -57,6 +57,13 @@
             mailboxViewMode = mode === 'compact' ? 'compact' : 'standard';
             localStorage.setItem('ol_mailbox_view_mode', mailboxViewMode);
 
+            // 切换离开简洁模式时，停止所有简洁模式轮询（无 toast）
+            if (mailboxViewMode !== 'compact') {
+                if (typeof stopAllCompactAutoPolls === 'function') {
+                    stopAllCompactAutoPolls();
+                }
+            }
+
             const standardLayout = document.getElementById('mailboxStandardLayout');
             const compactLayout = document.getElementById('mailboxCompactLayout');
 
@@ -496,16 +503,16 @@
                 return;
             }
 
-            // DOM 节点检查
-            if (!findCompactAccountRow(email)) {
-                stopCompactAutoPoll(email, compactT('页面元素丢失，已停止监听'), 'info');
-                return;
-            }
-
-            // 账号存在性检查
+            // 账号存在性检查（优先于 DOM 检查，避免 DOM 重渲染期间误报）
             var accounts = typeof getCompactVisibleAccounts === 'function' ? getCompactVisibleAccounts() : [];
             if (!accounts.some(function(a) { return a.email === email; })) {
                 stopCompactAutoPoll(email, compactT('账号已被删除，已停止监听'), 'error');
+                return;
+            }
+
+            // DOM 节点检查（账号存在但 DOM 暂时不在时，只跳过本次 poll，不停止）
+            if (!findCompactAccountRow(email)) {
+                // DOM 可能正在重新渲染，跳过本次轮询等待下次
                 return;
             }
 
