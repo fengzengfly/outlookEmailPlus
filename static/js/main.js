@@ -440,8 +440,10 @@
             if (page === 'dashboard') loadDashboard();
             if (page === 'mailbox') {
                 if (groups.length === 0) {
+                    console.warn('[DEBUG-POLL] navigate(mailbox): groups empty, calling loadGroups()');
                     loadGroups();
                 } else if (currentGroupId) {
+                    console.warn('[DEBUG-POLL] navigate(mailbox): currentGroupId=', currentGroupId, ', calling loadAccountsByGroup(currentGroupId) — startPolling=false(default)');
                     loadAccountsByGroup(currentGroupId);
                 }
                 if (typeof switchMailboxViewMode === 'function') {

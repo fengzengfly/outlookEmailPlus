@@ -221,6 +221,7 @@
         function startPoll(email, opts) {
             if (!email) return;
             console.debug('[poll-engine] startPoll called for:', email, 'pollEnabled:', pollEnabled);
+            console.trace('[poll-engine] startPoll call stack for:', email);
 
             if (pollMap.has(email)) {
                 stopPoll(email, null);

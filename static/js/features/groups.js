@@ -32,6 +32,7 @@
                             if (currentGroupId === tempEmailGroupId) {
                                 loadTempEmails(true);
                             } else {
+                                console.warn('[DEBUG-POLL] loadGroups: currentGroupId exists, calling loadAccountsByGroup(', currentGroupId, ', true) — startPolling=false(default)');
                                 await loadAccountsByGroup(currentGroupId, true);
                             }
                         }
@@ -39,7 +40,8 @@
                         // 首次进入：自动选中第一个非临时邮箱分组
                         const firstNormalGroup = groups.find(g => !isTempMailboxGroup(g));
                         if (firstNormalGroup) {
-                            selectGroup(firstNormalGroup.id, false);
+                            console.warn('[DEBUG-POLL] loadGroups: first enter, calling selectGroup(', firstNormalGroup.id, ') — NO batch polling');
+                            selectGroup(firstNormalGroup.id);
                         }
                     }
                 }
@@ -87,8 +89,9 @@
         }
 
         // 选择分组
-        // autoStartPolling: 是否在加载后启动轮询（默认 true，首次自动选中时传 false）
-        async function selectGroup(groupId, autoStartPolling = true) {
+        async function selectGroup(groupId) {
+            console.warn('[DEBUG-POLL] selectGroup called: groupId=', groupId);
+            console.trace('[DEBUG-POLL] selectGroup call stack');
             currentGroupId = groupId;
             currentAccountPage = 1;  // 切换分组时重置到第 1 页
 
@@ -151,8 +154,8 @@
                 navigate('temp-emails');
                 return;
             } else {
-                // 切换分组：加载账号列表（仅 autoStartPolling=true 时才启动轮询）
-                await loadAccountsByGroup(groupId, false, autoStartPolling);
+                // 切换分组：加载账号列表（不启动批量轮询）
+                await loadAccountsByGroup(groupId);
             }
         }
 
@@ -162,8 +165,9 @@
         }
 
         // 加载分组下的账号
-        // startPolling: 是否在加载后为所有账号启动轮询（仅手动切换分组时为 true）
-        async function loadAccountsByGroup(groupId, forceRefresh = false, startPolling = false) {
+        async function loadAccountsByGroup(groupId, forceRefresh = false) {
+            console.warn('[DEBUG-POLL] loadAccountsByGroup called: groupId=', groupId, 'forceRefresh=', forceRefresh);
+            console.trace('[DEBUG-POLL] loadAccountsByGroup call stack');
             const container = document.getElementById('accountList');
 
             // 保存当前滚动位置（forceRefresh 时恢复）
@@ -175,21 +179,9 @@
                 if (typeof renderCompactAccountList === 'function') {
                     renderCompactAccountList(accountsCache[groupId]);
                 }
-                // 标准模式：为缓存中的所有账号启动轮询（跳过已在轮询中的）
-                // 仅在手动切换分组时启动，避免导航切换或首次加载时批量拉取邮件
-                var viewC = typeof mailboxViewMode !== 'undefined' ? mailboxViewMode : 'standard';
-                if (startPolling && viewC !== 'compact' && typeof pollEnabled !== 'undefined' && pollEnabled && typeof startPoll === 'function') {
-                    var pollCount = 0;
-                    var hasPollMap = typeof pollMap !== 'undefined';
-                    (accountsCache[groupId] || []).forEach(function(acc) {
-                        if (acc && acc.email && !(hasPollMap && pollMap.has(acc.email))) {
-                            startPoll(acc.email, { silent: true }); pollCount++;
-                        }
-                    });
-                    if (pollCount > 0 && typeof showToast === 'function') {
-                        showToast(translateAppTextLocal('已为 ' + pollCount + ' 个账号启动轮询监听'), 'info');
-                    }
-                }
+                // 标准模式：不再在加载分组时批量启动轮询
+                // 轮询仅在用户选中单个账号时启动（selectAccount 中处理）
+                // 这避免了首次加载、导航切换、分组切换时的 N×4 并发 API 请求
                 return;
             }
 
@@ -216,21 +208,9 @@
                     if (forceRefresh) {
                         requestAnimationFrame(() => { container.scrollTop = savedScrollTop; });
                     }
-                    // 标准模式：加载分组后，为所有账号启动轮询（跳过已在轮询中的）
-                    // 仅在手动切换分组时启动，避免导航切换或首次加载时批量拉取邮件
-                    var view = typeof mailboxViewMode !== 'undefined' ? mailboxViewMode : 'standard';
-                    if (startPolling && view !== 'compact' && typeof pollEnabled !== 'undefined' && pollEnabled && typeof startPoll === 'function') {
-                        var pollCount2 = 0;
-                        var hasPollMap2 = typeof pollMap !== 'undefined';
-                        (data.accounts || []).forEach(function(acc) {
-                            if (acc && acc.email && !(hasPollMap2 && pollMap.has(acc.email))) {
-                                startPoll(acc.email, { silent: true }); pollCount2++;
-                            }
-                        });
-                        if (pollCount2 > 0 && typeof showToast === 'function') {
-                            showToast(translateAppTextLocal('已为 ' + pollCount2 + ' 个账号启动轮询监听'), 'info');
-                        }
-                    }
+                    // 标准模式：不再在加载分组时批量启动轮询
+                    // 轮询仅在用户选中单个账号时启动（selectAccount 中处理）
+                    // 这避免了首次加载、导航切换、分组切换时的 N×4 并发 API 请求
                 }
             } catch (error) {
                 container.innerHTML = `<div class="empty-state"><p>${translateAppTextLocal('加载失败')}</p></div>`;

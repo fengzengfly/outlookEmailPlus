@@ -514,5 +514,6 @@
             var accounts = typeof getCompactVisibleAccounts === 'function' ? getCompactVisibleAccounts() : [];
             var found = accounts.some(function(a) { return a.email === email; });
             if (!found) return;
+            console.warn('[DEBUG-POLL] email-copied event: starting poll for', email);
             if (typeof startPoll === 'function') startPoll(email);
         });
