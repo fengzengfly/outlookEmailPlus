@@ -10,8 +10,8 @@ Unlike general-purpose email clients, it focuses on **registration and verificat
 
 - **Built for registration workflows**: it removes unnecessary steps as much as possible. You can copy mailbox addresses with one click; after sending a verification email on a signup page, you can return to the manager, click "Verification Code", fetch the latest email, and quickly extract the code or verification link with regex.
 - **Lighter and more focused**: non-core features such as sending mail are intentionally left out, so the interface stays cleaner and every design choice is centered on completing registration tasks.
-- **Broader import compatibility**: it supports mainstream mailbox providers such as Gmail, QQ, and 163, as well as custom IMAP servers. Self-hosted mailboxes also work. Built-in temp mailboxes help reduce privacy exposure.
-- **Automation-friendly**: it exposes APIs for batch registration workflows, including mailbox claiming, verification-code retrieval, and mailbox release.
+- **Broader import compatibility**: it supports mainstream mailbox providers such as Gmail, QQ, and 163, as well as custom IMAP servers. Self-hosted mailboxes also work. Built-in CF Worker temp mailboxes support multi-domain configuration and Admin Key encryption, significantly reducing privacy exposure in registration workflows.
+- **Automation-friendly**: it exposes APIs for batch registration workflows; the mail pool supports project-scoped isolation via `project_key`, so already-used accounts are never re-claimed within the same project. Mailbox claiming, verification-code retrieval, and release are all covered.
 - **Third-party notifications**: third-party notification channels are supported. Telegram is already integrated, and important mailboxes can push alerts automatically.
 
 In short, OutlookMail Plus is a mailbox manager designed specifically for registration workflows.
@@ -65,13 +65,13 @@ Highlights include:
 ## Core Capabilities
 
 - Multi-mailbox management
-  Supports Outlook OAuth, regular IMAP mailboxes, and GPTMail temp mailboxes
+  Supports Outlook OAuth, regular IMAP mailboxes, and CF Worker temp mailboxes (multi-domain configuration, Admin Key encrypted at rest)
 - Bulk import and organization
   Supports bulk import, tags, search, groups, and export
 - Mail reading and extraction
   Supports verification-code extraction, link extraction, and raw message viewing
 - Mail pool orchestration
-  Supports claiming, releasing, completing, cooldown recovery, and stale-claim recycling
+  Supports claiming, releasing, completing, cooldown recovery, and stale-claim recycling; supports `project_key` project-scoped isolation so already-used accounts are not re-claimed within the same project
 - Controlled external APIs
   Supports `X-API-Key` authentication, multiple consumer keys, mailbox scope restrictions, IP allowlists, and rate limits
 - Notification delivery
