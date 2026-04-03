@@ -42,17 +42,14 @@ OutlookMail Plus 是一款面向个人与团队的注册邮箱管理器。
 
 重点包括：
 
-- 当前稳定版本：`v1.10.0`
-- 新增账号管理“简洁模式”，支持高密度列表、摘要列和标准/简洁模式状态同步
-- 新增备注轻量编辑链路，可直接通过独立 `PATCH` 接口更新备注而不改动账号凭据
-- 新增临时邮箱富内容展示，支持 `cid:` 内联图片、data URL 和远程图片地址
-- 新增按账号类型生成的刷新失败建议，Outlook OAuth 与 IMAP 场景的提示更准确
-- 中英双语界面与更完整的 i18n 覆盖
-- 统一通知分发能力：邮件通知与 Telegram 推送共存
-- 受控外部接口增强：单 Key、多 Key、白名单、限流、危险端点禁用
-- 邮箱池外部集成统一收敛到 `/api/external/pool/*`
-- 旧匿名 `/api/pool/*` 端点已移除
-- 新增演示站点保护开关：可禁止在设置页修改登录密码
+- 当前稳定版本：`v1.11.0`
+- 邮箱池新增项目隔离策略：同一 `caller_id + project_key` 组合下，已使用的账号不会被重复领取（PR#27，DB v17）
+- CF Worker 临时邮箱支持多域：可在前端设置中配置多个 CF Worker 域名，并通过新增"同步域名"按钮刷新
+- CF Worker Admin Key 现在静态加密存储（DB v18），不再以明文方式写入数据库
+- 修复 BUG-06：生成/删除临时邮箱后选中状态得到保留
+- 修复 BUG-07：临时邮箱面板域名下拉刷新后选择不再被重置
+- i18n 扩充：临时邮箱面板域名提示文字、CF Worker 域名同步按钮等新增双语支持
+- CI 全面修复：black 格式化、flake8 E203/C901 noqa 压制、pool.py 重复函数定义清理、测试断言对齐（`success` → `used`）
 
 ## 核心能力
 
@@ -87,7 +84,7 @@ web_outlook_app.py    兼容入口
 ### Docker 部署
 
 ```bash
-docker pull guangshanshui/outlook-email-plus:v1.10.0
+docker pull guangshanshui/outlook-email-plus:v1.11.0
 docker pull guangshanshui/outlook-email-plus:latest
 
 docker run -d \
@@ -97,14 +94,14 @@ docker run -d \
   -e SECRET_KEY=your-secret-key-here \
   -e LOGIN_PASSWORD=your-login-password \
   -e ALLOW_LOGIN_PASSWORD_CHANGE=false \
-  guangshanshui/outlook-email-plus:v1.10.0
+  guangshanshui/outlook-email-plus:v1.11.0
 ```
 
 说明：
 
 - 建议始终挂载 `data/`，避免数据库与运行数据丢失
 - `SECRET_KEY` 必须稳定且足够强，建议随机64位
-- 生产环境建议优先固定到明确版本标签，例如 `v1.10.0`；`latest` 更适合快速体验
+- 生产环境建议优先固定到明确版本标签，例如 `v1.11.0`；`latest` 更适合快速体验
 
 ### 本地运行
 

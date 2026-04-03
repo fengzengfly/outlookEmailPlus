@@ -38,17 +38,14 @@ The repository already includes some screenshots, and more can be added later.
 
 Highlights include:
 
-- current stable version: `v1.10.0`
-- a new compact mailbox mode for higher-density account operations with synchronized selection state
-- a lightweight remark-edit flow that updates remarks through a dedicated `PATCH` endpoint without touching credentials
-- richer temp-mail rendering with support for `cid:` inline images, data URLs, and remote image URLs
-- more accurate refresh-failure suggestions that branch by Outlook OAuth vs. IMAP account type
-- broader bilingual UI and more complete i18n coverage
-- unified notification dispatch for business email notifications and Telegram delivery
-- stronger external API controls with single-key, multi-key, allowlist, rate-limit, and dangerous-endpoint disable support
-- mail-pool integrations consolidated under `/api/external/pool/*`
-- removal of the old anonymous `/api/pool/*` endpoints
-- a new demo-site guard that can prevent login password changes from the Settings page
+- current stable version: `v1.11.0`
+- mailbox pool project isolation: with the same `caller_id + project_key` combination, already-used accounts are no longer re-claimed (PR#27, DB v17)
+- CF Worker temp-mail multi-domain support: multiple CF Worker domains can now be configured in the settings page, and a new "Sync Domains" button refreshes the list
+- CF Worker Admin Key is now encrypted at rest (DB v18) and no longer stored in plaintext
+- BUG-06 fix: mailbox selection is preserved after generating or deleting a temp mailbox
+- BUG-07 fix: domain dropdown selection is no longer reset on temp-mail panel refresh
+- i18n expansion: domain hint texts in the temp-mail panel, CF Worker domain sync button, and more added to bilingual coverage
+- CI fully restored: black formatting, flake8 E203/C901 noqa suppressions, pool.py duplicate function cleanup, and test assertion alignment (`success` → `used`)
 
 ## Core Capabilities
 
@@ -83,7 +80,7 @@ web_outlook_app.py    Backward-compatible entrypoint
 ### Docker Deployment
 
 ```bash
-docker pull guangshanshui/outlook-email-plus:v1.10.0
+docker pull guangshanshui/outlook-email-plus:v1.11.0
 docker pull guangshanshui/outlook-email-plus:latest
 
 docker run -d \
@@ -93,14 +90,14 @@ docker run -d \
   -e SECRET_KEY=your-secret-key-here \
   -e LOGIN_PASSWORD=your-login-password \
   -e ALLOW_LOGIN_PASSWORD_CHANGE=false \
-  guangshanshui/outlook-email-plus:v1.10.0
+  guangshanshui/outlook-email-plus:v1.11.0
 ```
 
 Notes:
 
 - always mount `data/` to avoid losing the database and runtime data
 - `SECRET_KEY` must stay stable and strong; a random 64-character value is recommended
-- for production deployments, pin an explicit version tag such as `v1.10.0`; keep `latest` for quick evaluation
+- for production deployments, pin an explicit version tag such as `v1.11.0`; keep `latest` for quick evaluation
 
 ### Local Run
 
