@@ -31,7 +31,7 @@ from outlook_web.security.crypto import (
 # v15：2026-03-26 临时邮箱能力正式化 — temp_emails 扩展字段、temp_email_messages 复合唯一、temp_mail_* 设置项
 # v16：2026-03-28 patch — 修补 idx_temp_emails_task_token_unique 唯一索引（v15 旧库迁移代码未包含该索引，导致老库升级后缺失）
 # v17：2026-04-02 project-scoped pool reuse — accounts 表新增 email_domain 列，account_project_usage 表（project_key 防同项目重复领取），external_probe_cache 表新增 baseline_timestamp 列
-DB_SCHEMA_VERSION = 17
+DB_SCHEMA_VERSION = 18
 DB_SCHEMA_VERSION_KEY = "db_schema_version"
 DB_SCHEMA_LAST_UPGRADE_TRACE_ID_KEY = "db_schema_last_upgrade_trace_id"
 DB_SCHEMA_LAST_UPGRADE_ERROR_KEY = "db_schema_last_upgrade_error"
@@ -1224,3 +1224,17 @@ def migrate_sensitive_data(conn: sqlite3.Connection):
 
     if migrated_count > 0:
         print(f"已迁移 {migrated_count} 个账号的敏感数据为加密存储")
+
+    # 迁移 settings 表中明文存储的 cf_worker_admin_key
+    _SETTINGS_SENSITIVE_KEYS = ["cf_worker_admin_key"]
+    for key in _SETTINGS_SENSITIVE_KEYS:
+        row = cursor.execute(
+            "SELECT value FROM settings WHERE key = ?", (key,)
+        ).fetchone()
+        if row and row[0] and not is_encrypted(row[0]):
+            encrypted_value = encrypt_data(row[0])
+            cursor.execute(
+                "UPDATE settings SET value = ?, updated_at = CURRENT_TIMESTAMP WHERE key = ?",
+                (encrypted_value, key),
+            )
+            print(f"已迁移 settings.{key} 为加密存储")

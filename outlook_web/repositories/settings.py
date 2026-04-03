@@ -126,8 +126,15 @@ def get_cf_worker_base_url() -> str:
 
 
 def get_cf_worker_admin_key() -> str:
-    """获取 Cloudflare Worker ADMIN_PASSWORDS 中的密码值。"""
-    return get_setting("cf_worker_admin_key", "").strip()
+    """获取 Cloudflare Worker ADMIN_PASSWORDS 中的密码值（自动解密 enc: 格式）。"""
+    value = get_setting("cf_worker_admin_key", "").strip()
+    if not value:
+        return ""
+    try:
+        return decrypt_data(value)
+    except Exception:
+        # 兼容历史明文值：解密失败时直接返回明文
+        return value
 
 
 def get_temp_mail_domains() -> list[dict[str, Any]]:

@@ -550,7 +550,9 @@ def api_update_settings() -> Any:
         ):
             updated.append("CF Worker Admin Key（未变更）")
         elif new_cf_key:
-            queue_setting_update("cf_worker_admin_key", new_cf_key)
+            # 加密存储（与 telegram_bot_token / external_api_key 保持一致）
+            encrypted_cf_key = encrypt_data(new_cf_key)
+            queue_setting_update("cf_worker_admin_key", encrypted_cf_key)
             updated.append("CF Worker Admin Key")
         else:
             updated.append("CF Worker Admin Key（空值已忽略）")
