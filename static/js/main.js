@@ -2058,6 +2058,49 @@ ${details}
             }
         }
 
+        async function syncCfWorkerDomains() {
+            const btn = document.getElementById('btnSyncCfWorkerDomains');
+            const hintEl = document.getElementById('cfWorkerSyncDomainsHint');
+            if (btn) { btn.disabled = true; btn.textContent = translateAppTextLocal('⏳ 同步中…'); }
+            try {
+                const resp = await fetch('/api/settings/cf-worker-sync-domains', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                const data = await resp.json();
+                if (data.success) {
+                    // 同步成功后自动刷新域名相关输入框
+                    const domainsEl = document.getElementById('settingsTempMailDomains');
+                    const defaultDomainEl = document.getElementById('settingsTempMailDefaultDomain');
+                    if (domainsEl && data.domains) {
+                        domainsEl.value = JSON.stringify(
+                            data.domains.map(d => ({ name: d, enabled: true })),
+                            null, 2
+                        );
+                    }
+                    if (defaultDomainEl && data.default_domain) {
+                        defaultDomainEl.value = data.default_domain;
+                    }
+                    const msg = data.message || `已同步 ${(data.domains || []).length} 个域名`;
+                    showToast(msg, 'success');
+                    if (hintEl) {
+                        const versionInfo = data.version ? ` (${data.version})` : '';
+                        const titleInfo = data.title ? `「${data.title}」` : '';
+                        hintEl.textContent = `✅ 同步成功 ${titleInfo}${versionInfo}：${(data.domains || []).join(', ')}`;
+                    }
+                } else {
+                    const errMsg = (data.error && data.error.message) || '同步失败，请检查 CF Worker 地址配置';
+                    handleApiError(data, errMsg);
+                    if (hintEl) { hintEl.textContent = `❌ ${errMsg}`; }
+                }
+            } catch (e) {
+                showToast(`${translateAppTextLocal('请求失败')}: ${e.message}`, 'error');
+                if (hintEl) { hintEl.textContent = `❌ 请求失败: ${e.message}`; }
+            } finally {
+                if (btn) { btn.disabled = false; btn.textContent = translateAppTextLocal('☁ 从 CF Worker 同步域名'); }
+            }
+        }
+
         // ==================== 自动轮询功能 ====================
 
         // 初始化轮询设置

@@ -464,6 +464,14 @@
                                 <input type="password" class="form-input" id="settingsCfWorkerAdminKey" placeholder="CF Worker 的 ADMIN_PASSWORDS 值" autocomplete="off">
                                 <div class="form-hint">对应 CF Worker 环境变量 ADMIN_PASSWORDS 中的密码值。</div>
                             </div>
+                            <div class="form-group" style="margin-top: 0.75rem;">
+                                <button type="button" class="btn btn-secondary" id="btnSyncCfWorkerDomains" onclick="syncCfWorkerDomains()" style="font-size: 0.85rem;">
+                                    ☁ 从 CF Worker 同步域名
+                                </button>
+                                <div class="form-hint" id="cfWorkerSyncDomainsHint" style="margin-top: 0.4rem;">
+                                    自动读取 CF Worker 的域名配置，同步至下方「临时邮箱可用域名」和「默认域名」。
+                                </div>
+                            </div>
                         </div>
                         <div class="form-group">
                             <label class="form-label">对外开放 API Key</label>
