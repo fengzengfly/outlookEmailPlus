@@ -485,7 +485,7 @@ def list_messages_for_external(
                 "临时邮箱上游读取失败" if exc.code == "TEMP_EMAIL_UPSTREAM_READ_FAILED" else exc.message,
                 data=exc.data,
             ) from exc
-        sliced = messages[skip : skip + top]
+        sliced = messages[skip : skip + top]  # noqa: E203
         method_label = str(sliced[0].get("method") or "Temp Mail") if sliced else "Temp Mail"
         return sliced, method_label
 
@@ -570,7 +570,7 @@ def list_messages_for_external(
     )
 
 
-def filter_messages(
+def filter_messages(  # noqa: C901
     emails: List[Dict[str, Any]],
     *,
     from_contains: str = "",
@@ -637,7 +637,7 @@ def get_latest_message_for_external(
     return filtered[0]
 
 
-def get_message_detail_for_external(
+def get_message_detail_for_external(  # noqa: C901
     *,
     email_addr: str,
     message_id: str,
@@ -837,7 +837,7 @@ def get_verification_result(
     return extracted
 
 
-def wait_for_message(
+def wait_for_message(  # noqa: C901
     *,
     email_addr: str,
     timeout_seconds: int = 30,
