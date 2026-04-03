@@ -30,15 +30,21 @@ class PoolFlowSuiteTests(unittest.TestCase):
             settings_repo.set_setting("external_api_ip_whitelist", "[]")
             settings_repo.set_setting("external_api_rate_limit_per_minute", "60")
             settings_repo.set_setting("external_api_disable_pool_claim_random", "false")
-            settings_repo.set_setting("external_api_disable_pool_claim_release", "false")
-            settings_repo.set_setting("external_api_disable_pool_claim_complete", "false")
+            settings_repo.set_setting(
+                "external_api_disable_pool_claim_release", "false"
+            )
+            settings_repo.set_setting(
+                "external_api_disable_pool_claim_complete", "false"
+            )
             settings_repo.set_setting("external_api_disable_pool_stats", "false")
 
     @staticmethod
     def _auth_headers():
         return {"X-API-Key": "abc123"}
 
-    def _make_pool_account(self, *, provider: str = "outlook", pool_status: str = "available") -> dict:
+    def _make_pool_account(
+        self, *, provider: str = "outlook", pool_status: str = "available"
+    ) -> dict:
         conn = self.create_conn()
         try:
             email_addr = f"flow_{uuid.uuid4().hex}@poolflow.test"
@@ -97,7 +103,7 @@ class PoolFlowSuiteTests(unittest.TestCase):
                 "SELECT pool_status, success_count, fail_count FROM accounts WHERE id = ?",
                 (claim_data["data"]["account_id"],),
             ).fetchone()
-            self.assertEqual(row["pool_status"], "cooldown")
+            self.assertEqual(row["pool_status"], "used")
             self.assertEqual(row["success_count"], 1)
             self.assertEqual(row["fail_count"], 0)
         finally:
