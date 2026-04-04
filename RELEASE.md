@@ -118,9 +118,10 @@ docker pull guangshanshui/outlook-email-plus:latest
 - 拉取时间与 Actions 构建时间匹配
 - `docker image inspect` 的 digest 与发布时一致（可选）
 
-7. **创建 GitHub Release（人工步骤）**
+7. **创建 GitHub Release（自动）**
 
-在 GitHub Releases 页面创建 `vX.Y.Z`，内容来自 `CHANGELOG.md` 的对应章节。
+push `vX.Y.Z` tag 后，会由工作流 `.github/workflows/create-github-release.yml` 自动创建同名 Release，内容从 `CHANGELOG.md` 对应章节提取。
+如需补充附件或微调文案，可在 GitHub Releases 页面直接编辑。
 
 ## Hotfix（紧急修复）流程
 
