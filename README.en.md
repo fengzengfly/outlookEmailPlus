@@ -18,7 +18,7 @@ In short, OutlookMail Plus is a mailbox manager designed specifically for regist
 
 ## Demo Site
 
-Demo site: https://gbcoinystsyz.ap-southeast-1.clawcloudrun.com  
+Demo site: https://demo.outlookmailplus.tech
 Login password: 12345678
 
 There are 10 mailbox accounts provided for demonstration. Please do not delete them individually. Their content is periodically restored or reloaded. Do not treat them as your own accounts.
