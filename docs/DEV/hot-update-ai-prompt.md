@@ -58,7 +58,103 @@ docker-compose.yml           # app + watchtower 两个服务
 
 ---
 
-## 待实施任务
+## 实施进度
+
+### ✅ Phase 1: BUG 修复 — 已完成 (Commit: 91a8f35)
+
+#### ✅ 任务 1: 修复 Watchtower Token 为空时启动失败的问题
+
+**实施方案**:
+1. ✅ `.env.example` 中添加 `WATCHTOWER_HTTP_API_TOKEN` 模板和生成命令
+2. ✅ `docker-compose.yml` 中为 `WATCHTOWER_HTTP_API_TOKEN` 提供默认 fallback token
+3. ✅ 设置页面 Watchtower 配置区域增加首次配置引导文案
+4. ✅ `api_deployment_info()` 检测 Watchtower 连通性，前端显示警告
+
+**已修改文件**:
+- `.env.example`: 添加 Token 配置说明和生成命令
+- `docker-compose.yml`: 默认值 `default-watchtower-token-please-change-in-production`
+- `templates/index.html`: 首次配置引导文案
+
+#### ✅ 任务 2: 修复浏览器缓存旧 JS 文件的问题
+
+**实施方案**:
+1. ✅ `outlook_web/app.py` 中添加 `@app.after_request` hook
+2. ✅ 带版本号参数的静态文件长期缓存 (1年 + immutable)
+3. ✅ 不带版本号的短期缓存 (1小时 + must-revalidate)
+
+**已修改文件**:
+- `outlook_web/app.py`: 新增 `set_static_cache_control()` 函数
+
+---
+
+### ✅ Phase 2: UI 提示优化 — 已完成 (Commit: 91a8f35)
+
+#### ✅ 任务 3: 镜像标签/构建模式检测与提示
+
+**实施方案**:
+1. ✅ 后端新增 API `GET /api/system/deployment-info`
+2. ✅ 检测: 镜像名/本地构建/固定标签/Watchtower 连通性
+3. ✅ 返回警告信息和 `can_auto_update` 状态
+4. ✅ 前端 `templates/index.html` 添加 `deploymentWarnings` 占位符
+
+**已修改文件**:
+- `outlook_web/controllers/system.py`: 新增 `api_deployment_info()` (177 行)
+- `outlook_web/routes/system.py`: 注册路由
+- `templates/index.html`: 添加警告容器
+
+---
+
+### ✅ Phase 3: 内置 Docker API 自更新 — 已完成 (Commit: 91a8f35)
+
+#### ✅ 任务 4: 实现内置 Docker API 自更新功能
+
+**实施方案**:
+1. ✅ 新建 `outlook_web/services/docker_update.py` (839 行)
+   - 完整的 12 步自更新流程
+   - 安全检查 (开关/docker.sock/白名单)
+   - 回滚机制 (失败时保留旧容器)
+
+2. ✅ 修改 `outlook_web/controllers/system.py`
+   - `api_trigger_update()` 支持 `method` 参数 (watchtower / docker_api)
+   - 分离 `_trigger_watchtower_update()` 和 `_trigger_docker_api_update()`
+   - 审计日志记录
+
+3. ✅ 修改 `outlook_web/controllers/settings.py`
+   - GET: 返回 `update_method` 配置
+   - PUT: 保存 `update_method` 配置并验证
+
+4. ✅ 修改 `static/js/main.js`
+   - `loadSettings()`: 加载 `update_method`
+   - `saveSettings()`: 保存 `update_method`
+   - `triggerUpdate()`: 自动识别更新方式,调整超时时间 (Docker API 120s vs Watchtower 10s)
+   - 完善错误提示 (区分两种模式)
+
+5. ✅ 修改 `templates/index.html`
+   - 更新方式选择 (Radio: Watchtower / Docker API)
+   - Docker API 安全警告面板
+   - 动态切换配置区域显示/隐藏
+
+6. ✅ 修改 `docker-compose.yml`
+   - 添加 docker.sock 挂载说明 (默认注释)
+   - 添加 `DOCKER_SELF_UPDATE_ALLOW` 环境变量
+
+7. ✅ 修改 `requirements.txt`
+   - 添加 `docker>=6.0.0` 依赖
+
+**已修改/新增文件**:
+- 新增: `outlook_web/services/docker_update.py` (839 行)
+- 修改: `outlook_web/controllers/system.py` (新增 150+ 行)
+- 修改: `outlook_web/controllers/settings.py` (新增 20 行)
+- 修改: `static/js/main.js` (重构 triggerUpdate, 新增 70+ 行)
+- 修改: `templates/index.html` (新增更新方式 UI, 70+ 行)
+- 修改: `docker-compose.yml`, `.env.example`, `requirements.txt`
+
+---
+
+## 待实施任务 (可选扩展)
+
+以下任务为可选扩展功能,可根据需求决定是否实施:
+
 
 请按照优先级顺序实施以下改进：
 
