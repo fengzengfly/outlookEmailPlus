@@ -954,6 +954,9 @@
             // 初始化轮询设置
             initPollingSettings();
 
+            // 初始化“一键更新配置”更新方式切换显隐逻辑（避免 index.html 内联脚本）
+            initUpdateMethodConfigToggles();
+
             // 请求浏览器通知权限
             if ('Notification' in window && Notification.permission === 'default') {
                 Notification.requestPermission();
@@ -1490,6 +1493,49 @@ ${details}
         }
 
         // ==================== 设置相关 ====================
+
+        // ==================== 一键更新配置（更新方式切换） ====================
+
+        function toggleUpdateMethodConfig() {
+            const watchtowerConfigArea = document.getElementById('watchtowerConfigArea');
+            const dockerApiWarning = document.getElementById('dockerApiWarning');
+            if (!watchtowerConfigArea || !dockerApiWarning) return;
+
+            const selectedMethod = document.querySelector('input[name="updateMethod"]:checked')?.value;
+            if (selectedMethod === 'docker_api') {
+                watchtowerConfigArea.style.display = 'none';
+                dockerApiWarning.style.display = 'block';
+            } else {
+                watchtowerConfigArea.style.display = 'block';
+                dockerApiWarning.style.display = 'none';
+            }
+        }
+
+        function initUpdateMethodConfigToggles() {
+            try {
+                const updateMethodRadios = document.getElementsByName('updateMethod');
+                if (!updateMethodRadios || updateMethodRadios.length === 0) {
+                    return;
+                }
+
+                updateMethodRadios.forEach((radio) => {
+                    if (!radio) return;
+                    // 防止重复绑定（某些情况下可能多次初始化）
+                    if (radio.dataset && radio.dataset.boundUpdateMethodToggle === 'true') {
+                        return;
+                    }
+                    radio.addEventListener('change', toggleUpdateMethodConfig);
+                    if (radio.dataset) {
+                        radio.dataset.boundUpdateMethodToggle = 'true';
+                    }
+                });
+
+                // 初始化时调用一次，确保初始显隐正确
+                toggleUpdateMethodConfig();
+            } catch (e) {
+                // 静默失败：不影响其它功能
+            }
+        }
 
         // 显示设置模态框
         async function showSettingsModal() {

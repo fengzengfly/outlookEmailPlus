@@ -893,32 +893,7 @@
                             </div>
                         </div>
                         
-                        <script>
-                            // 切换更新方式时显示/隐藏相关配置区域
-                            document.addEventListener('DOMContentLoaded', function() {
-                                const updateMethodRadios = document.getElementsByName('updateMethod');
-                                const watchtowerConfigArea = document.getElementById('watchtowerConfigArea');
-                                const dockerApiWarning = document.getElementById('dockerApiWarning');
-                                
-                                function toggleUpdateMethodConfig() {
-                                    const selectedMethod = document.querySelector('input[name="updateMethod"]:checked')?.value;
-                                    if (selectedMethod === 'docker_api') {
-                                        watchtowerConfigArea.style.display = 'none';
-                                        dockerApiWarning.style.display = 'block';
-                                    } else {
-                                        watchtowerConfigArea.style.display = 'block';
-                                        dockerApiWarning.style.display = 'none';
-                                    }
-                                }
-                                
-                                updateMethodRadios.forEach(radio => {
-                                    radio.addEventListener('change', toggleUpdateMethodConfig);
-                                });
-                                
-                                // 初始化时调用一次
-                                toggleUpdateMethodConfig();
-                            });
-                        </script>
+                        <!-- 更新方式切换（Watchtower/Docker API）的显隐逻辑已迁移到 static/js/main.js -->
                     </div>
 
                 </div>
