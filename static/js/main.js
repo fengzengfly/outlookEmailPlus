@@ -4133,3 +4133,68 @@ ${details}
                 btn.textContent = '立即更新';
             }
         }
+
+        /**
+         * 设置面板中的"手动触发更新"按钮回调
+         * 与 triggerUpdate() 类似，但 UI 反馈在设置面板内
+         */
+        async function manualTriggerUpdate() {
+            const btn = document.getElementById('btnManualTriggerUpdate');
+            const resultDiv = document.getElementById('manualUpdateResult');
+            if (!btn) return;
+
+            btn.disabled = true;
+            btn.textContent = '正在触发更新...';
+            if (resultDiv) {
+                resultDiv.style.display = 'none';
+                resultDiv.innerHTML = '';
+            }
+
+            // 读取当前选择的更新方式
+            const selectedRadio = document.querySelector('input[name="updateMethod"]:checked');
+            const updateMethod = selectedRadio ? selectedRadio.value : 'watchtower';
+
+            try {
+                const timeout = updateMethod === 'docker_api' ? 120000 : 10000;
+                const url = `/api/system/trigger-update?method=${updateMethod}`;
+
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+                const res = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'X-CSRFToken': getCSRFToken() },
+                    signal: controller.signal
+                });
+                clearTimeout(timeoutId);
+
+                const data = await res.json();
+                if (data.success) {
+                    window.__lastUpdateMethod = updateMethod;
+                    if (resultDiv) {
+                        resultDiv.style.display = 'block';
+                        resultDiv.innerHTML = `<span style="color: var(--clr-success, #28a745);">✅ ${escapeHtml(data.message || '更新已触发')}</span>`;
+                    }
+                    btn.textContent = '等待容器重启...';
+                    await waitForRestart();
+                } else {
+                    const msg = data.message || '未知错误';
+                    if (resultDiv) {
+                        resultDiv.style.display = 'block';
+                        resultDiv.innerHTML = `<span style="color: var(--clr-danger, #dc3545);">❌ ${escapeHtml(msg)}</span>`;
+                    }
+                    showToast('更新失败：' + msg, 'error', 8000);
+                    btn.disabled = false;
+                    btn.textContent = '立即更新';
+                }
+            } catch (e) {
+                const errMsg = e.name === 'AbortError' ? '请求超时' : (e.message || '网络错误');
+                if (resultDiv) {
+                    resultDiv.style.display = 'block';
+                    resultDiv.innerHTML = `<span style="color: var(--clr-danger, #dc3545);">❌ ${escapeHtml(errMsg)}</span>`;
+                }
+                showToast('更新请求失败：' + errMsg, 'error', 8000);
+                btn.disabled = false;
+                btn.textContent = '立即更新';
+            }
+        }

@@ -4,6 +4,92 @@
 
 ---
 
+## 2026-04-08
+
+### 操作记录
+
+#### 1. 热更新端到端测试（hotupdate-test 分支）
+
+**时间**：2026-04-08 上午
+
+**背景**：在 `hotupdate-test` 分支上对两种热更新方式（Watchtower 和 Docker API）进行端到端验证。
+
+**发现的 Bug 及修复**：
+
+1. **GHCR 镜像白名单缺失**（严重）：
+   - `ALLOWED_IMAGE_PREFIXES` 仅包含 Docker Hub 前缀 `guangshanshui/outlook-email-plus`
+   - GHCR 镜像 `ghcr.io/zeropointsix/outlook-email-plus` 被白名单拒绝
+   - 修复：添加 GHCR 前缀到白名单
+   
+2. **本地镜像检测逻辑错误**：
+   - `_looks_like_local_image_ref()` 使用 `ref.split("/")[0]` 提取 namespace
+   - 对 GHCR URL 返回 `ghcr.io` 而非完整前缀 `ghcr.io/zeropointsix`
+   - 修复：改用 `lower_ref.startswith(prefix)` 前缀匹配
+
+3. **版本比较函数不支持 pre-release 后缀**：
+   - `_version_gt()` 解析 `1.12.1-hotupdate-test` 时 `int("1-hotupdate-test")` 抛异常
+   - 修复：解析前用 `v.split("-", 1)[0]` 剥离 pre-release 后缀
+
+4. **测试文件方法定义丢失**：
+   - `test_has_update_false_when_same` 在编辑过程中方法定义行被意外删除
+   - 修复：恢复 `def test_has_update_false_when_same(self):` 定义
+
+**测试环境部署**：
+
+| 方式 | Compose 文件 | 项目名 | 端口 | 容器名 |
+|------|-------------|--------|------|--------|
+| Watchtower | `docker-compose.hotupdate-test.yml` | `watchtower-test` | 5002 | `outlook-hotupdate-test` |
+| Docker API | `docker-compose.docker-api-test.yml` | `dockerapi-test` | 5003 | `outlook-dockerapi-test` |
+
+> ⚠️ 两个 compose 文件必须使用不同的 `-p` 项目名启动，否则 Docker Compose 会将它们视为同一项目导致互相覆盖。
+
+**测试流程及结果**：
+
+1. 部署两个环境，均运行 v1.12.0（CI #109 构建的镜像）
+2. 提交版本变更 v1.12.0 → v1.12.1-hotupdate-test，推送触发 CI #112
+3. CI #112 构建成功，新镜像包含 v1.12.1-hotupdate-test
+
+**热更新测试结果**：
+
+| 方式 | 触发方式 | 结果 | 版本变化 |
+|------|---------|------|---------|
+| ✅ Watchtower | HTTP API POST（Watchtower 自动检测并更新） | 成功 | 1.12.0 → 1.12.1-hotupdate-test |
+| ✅ Docker API | API POST `/api/system/trigger-update?method=docker_api` | 成功 | 1.12.0 → 1.12.1-hotupdate-test |
+
+**已知问题**：
+
+1. **版本更新横幅不显示**：
+   - 顶部 `versionUpdateBanner` 依赖 `/api/system/version-check` 对比 GitHub Releases
+   - 当前 GitHub 最新 Release 为 v1.12.0，容器版本也是 v1.12.0 → `has_update=false` → 横幅不显示
+   - 这是设计问题：版本检测（GitHub Releases）与热更新（Docker 镜像更新）是两个独立概念
+   - 建议：在设置面板"一键更新配置"中增加"手动触发更新"按钮
+
+2. **设置面板缺少手动触发按钮**：
+   - "一键更新配置"卡片只有更新方式选择和 Watchtower 配置
+   - 没有"立即更新"按钮，用户只能通过版本横幅或 API 触发
+   - 建议：在 deploymentWarnings 下方添加触发按钮
+
+3. **Port 5003 deployment-info 的 update_method 默认为 watchtower**：
+   - 首次部署时默认更新方式是 watchtower，但 Docker API 测试环境没有 watchtower
+   - 需要在前端设置中手动切换为 Docker API
+
+**提交记录**（hotupdate-test 分支）：
+
+| 提交 | 说明 |
+|------|------|
+| `ddbc91e` | fix: add GHCR image to whitelist and update hotupdate test compose files |
+| `a89295f` | chore: bump version to 1.12.1-hotupdate-test and fix version comparison |
+
+**修改文件**：
+- `outlook_web/services/docker_update.py`：GHCR 白名单 + 前缀匹配修复
+- `outlook_web/controllers/system.py`：`_version_gt()` 支持 pre-release 后缀
+- `outlook_web/__init__.py`：版本号 1.12.0 → 1.12.1-hotupdate-test
+- `tests/test_version_update.py`：测试断言同步更新
+- `docker-compose.hotupdate-test.yml`：GHCR 镜像 + hotupdate-test 标签
+- `docker-compose.docker-api-test.yml`：GHCR 镜像 + 移除本地构建配置
+
+---
+
 ## 2026-04-07
 
 ### 操作记录
