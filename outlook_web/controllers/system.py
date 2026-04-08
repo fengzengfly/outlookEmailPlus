@@ -10,11 +10,6 @@ from flask import jsonify, request
 
 from outlook_web import __version__ as APP_VERSION
 from outlook_web import config
-
-# ==================== 版本检测缓存（模块级，重启后清空） ====================
-_version_cache: dict | None = None
-_version_cache_at: float = 0.0
-_VERSION_CACHE_TTL = 600  # 10 分钟
 from outlook_web.db import (
     DB_SCHEMA_LAST_UPGRADE_ERROR_KEY,
     DB_SCHEMA_LAST_UPGRADE_TRACE_ID_KEY,
@@ -30,6 +25,11 @@ from outlook_web.services import external_api as external_api_service
 from outlook_web.services.scheduler import REFRESH_LOCK_NAME
 
 logger = logging.getLogger(__name__)
+
+# ==================== 版本检测缓存（模块级，重启后清空） ====================
+_version_cache: dict | None = None
+_version_cache_at: float = 0.0
+_VERSION_CACHE_TTL = 600  # 10 分钟
 
 # 每次进程启动生成一次，用于前端判断是否发生重启
 _HEALTHZ_BOOT_ID = f"{int(time.time() * 1000)}-{os.getpid()}"
@@ -413,14 +413,6 @@ def api_trigger_update() -> Any:
         method: str (可选) - 更新方式 (watchtower / docker_api)
         remove_old: bool (可选) - Docker API 模式下是否删除旧容器 (默认 False)
     """
-    import os
-    import urllib.error
-    import urllib.request
-
-    from flask import request
-
-    from outlook_web.security.crypto import decrypt_data, is_encrypted
-
     # 获取更新方式参数
     update_method = request.args.get("method", "watchtower").lower()
 
@@ -500,7 +492,7 @@ def _trigger_watchtower_update() -> Any:
         return jsonify({"success": False, "message": f"触发更新失败: {str(e)}"}), 500
 
 
-def _trigger_docker_api_update() -> Any:
+def _trigger_docker_api_update() -> Any:  # noqa: C901
     """通过 Docker API 触发容器自更新
 
     A2（按需 helper job 容器）模式：
@@ -616,7 +608,7 @@ def _trigger_docker_api_update() -> Any:
 
 
 @login_required
-def api_deployment_info() -> Any:
+def api_deployment_info() -> Any:  # noqa: C901
     """获取当前容器的部署信息（用于一键更新功能提示）
 
     检测内容：
@@ -640,7 +632,6 @@ def api_deployment_info() -> Any:
     }
     """
     import os
-    import socket
 
     # 当前选择的更新方式（用于生成更符合语境的提示）
     update_method = settings_repo.get_setting("update_method", "watchtower")
@@ -800,7 +791,9 @@ def api_deployment_info() -> Any:
                 "message": "当前为本地构建模式，一键更新将无法工作",
                 "message_en": "Local build detected. Auto-update is not available",
                 "suggestion": "请使用远程镜像部署（如 guangshanshui/outlook-email-plus:latest）以支持一键更新",
-                "suggestion_en": "Please use remote image (e.g., guangshanshui/outlook-email-plus:latest) for auto-update support",
+                "suggestion_en": (
+                    "Please use remote image (e.g., guangshanshui/outlook-email-plus:latest) for auto-update support"
+                ),
             }
         )
 
@@ -826,7 +819,9 @@ def api_deployment_info() -> Any:
                     "message": "无法连接 Watchtower 服务（当前更新方式为 Watchtower）",
                     "message_en": "Cannot connect to Watchtower service (current method: Watchtower)",
                     "suggestion": "请确保 Watchtower 容器正常运行，并在系统设置中配置正确的 API 地址和 Token",
-                    "suggestion_en": "Please ensure Watchtower container is running and API credentials are configured correctly",
+                    "suggestion_en": (
+                        "Please ensure Watchtower container is running and API credentials are configured correctly"
+                    ),
                 }
             )
         else:
@@ -838,7 +833,9 @@ def api_deployment_info() -> Any:
                     "message": "Watchtower 不可达（当前更新方式为 Docker API，可忽略）",
                     "message_en": "Watchtower is unreachable (current method: Docker API, can be ignored)",
                     "suggestion": "如需使用 Watchtower 更新，请先配置 Watchtower 容器；或继续使用 Docker API 更新方式",
-                    "suggestion_en": "If you want Watchtower updates, configure Watchtower; otherwise keep using Docker API method",
+                    "suggestion_en": (
+                        "If you want Watchtower updates, configure Watchtower; otherwise keep using Docker API method"
+                    ),
                 }
             )
 
@@ -872,7 +869,7 @@ def api_deployment_info() -> Any:
 
 
 @login_required
-def api_test_watchtower() -> Any:
+def api_test_watchtower() -> Any:  # noqa: C901
     """测试 Watchtower 连通性：用配置的 URL + Token 请求 /v1/update (HEAD)"""
     import os
     import urllib.error
@@ -907,7 +904,7 @@ def api_test_watchtower() -> Any:
                 "Authorization": f"Bearer {wt_token}",
             },
         )
-        with urllib.request.urlopen(test_req, timeout=5) as resp:
+        with urllib.request.urlopen(test_req, timeout=5):
             return jsonify(
                 {
                     "success": True,
@@ -921,7 +918,7 @@ def api_test_watchtower() -> Any:
             return jsonify(
                 {
                     "success": False,
-                    "message": f"Watchtower 可达但认证失败，请检查 Token",
+                    "message": "Watchtower 可达但认证失败，请检查 Token",
                     "message_en": "Watchtower is reachable but authentication failed. Check your token.",
                 }
             )
