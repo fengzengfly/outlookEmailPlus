@@ -1322,7 +1322,20 @@ def _handle_auto_import(data: Dict[str, Any], *, add_to_pool: bool = False) -> A
 
 @login_required
 def api_update_account(account_id: int) -> Any:
-    """更新账号"""
+    """更新账号（邮箱池管理的 CF 临时邮箱不允许手动编辑）"""
+    # 邮箱池管理的 CF 临时邮箱不允许手动编辑
+    db = get_db()
+    cf_row = db.execute(
+        "SELECT provider FROM accounts WHERE id = ?", (account_id,)
+    ).fetchone()
+    if cf_row and (cf_row["provider"] or "").lower() == "cloudflare_temp_mail":
+        return build_error_response(
+            "POOL_ACCOUNT_UPDATE_DENIED",
+            "邮箱池管理的 CF 临时邮箱不允许手动编辑",
+            message_en="CF temp mail accounts managed by pool cannot be edited manually.",
+            status=403,
+        )
+
     data = request.json
 
     # 检查是否只更新状态
@@ -1534,14 +1547,23 @@ def _api_update_account_status(account_id: int, status: str) -> Any:
 
 @login_required
 def api_delete_account(account_id: int) -> Any:
-    """删除账号"""
+    """删除账号（邮箱池管理的 CF 临时邮箱不允许手动删除）"""
     email_addr = ""
     try:
         db = get_db()
         row = db.execute(
-            "SELECT email FROM accounts WHERE id = ?", (account_id,)
+            "SELECT email, provider FROM accounts WHERE id = ?", (account_id,)
         ).fetchone()
-        email_addr = row["email"] if row else ""
+        if row:
+            email_addr = row["email"]
+            # 邮箱池管理的 CF 临时邮箱不允许手动删除
+            if (row["provider"] or "").lower() == "cloudflare_temp_mail":
+                return build_error_response(
+                    "POOL_ACCOUNT_DELETE_DENIED",
+                    "邮箱池管理的 CF 临时邮箱不允许手动删除，请通过邮箱池接口释放",
+                    message_en="CF temp mail accounts managed by pool cannot be deleted manually. Use pool release API instead.",
+                    status=403,
+                )
     except Exception:
         email_addr = ""
     if accounts_repo.delete_account_by_id(account_id):
@@ -1562,7 +1584,18 @@ def api_delete_account(account_id: int) -> Any:
 
 @login_required
 def api_delete_account_by_email(email_addr: str) -> Any:
-    """根据邮箱地址删除账号"""
+    """根据邮箱地址删除账号（邮箱池管理的 CF 临时邮箱不允许手动删除）"""
+    db = get_db()
+    row = db.execute(
+        "SELECT provider FROM accounts WHERE email = ?", (email_addr,)
+    ).fetchone()
+    if row and (row["provider"] or "").lower() == "cloudflare_temp_mail":
+        return build_error_response(
+            "POOL_ACCOUNT_DELETE_DENIED",
+            "邮箱池管理的 CF 临时邮箱不允许手动删除，请通过邮箱池接口释放",
+            message_en="CF temp mail accounts managed by pool cannot be deleted manually. Use pool release API instead.",
+            status=403,
+        )
     if accounts_repo.delete_account_by_email(email_addr):
         log_audit("delete", "account", email_addr, f"删除账号：{email_addr}")
         return jsonify({"success": True})
@@ -1601,12 +1634,17 @@ def api_batch_delete_accounts() -> Any:
 
     for account_id in account_ids:
         try:
-            # 获取邮箱地址用于审计日志
+            # 获取邮箱地址和 provider 用于审计日志和保护判断
             db = get_db()
             row = db.execute(
-                "SELECT email FROM accounts WHERE id = ?", (account_id,)
+                "SELECT email, provider FROM accounts WHERE id = ?", (account_id,)
             ).fetchone()
             email_addr = row["email"] if row else ""
+
+            # 邮箱池管理的 CF 临时邮箱不允许手动删除，跳过
+            if row and (row["provider"] or "").lower() == "cloudflare_temp_mail":
+                failed_count += 1
+                continue
 
             if accounts_repo.delete_account_by_id(account_id):
                 log_audit(

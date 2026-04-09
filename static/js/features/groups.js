@@ -229,7 +229,8 @@
                 '126': '126 邮箱',
                 yahoo: 'Yahoo 邮箱',
                 aliyun: '阿里邮箱',
-                custom: '自定义 IMAP'
+                custom: '自定义 IMAP',
+                cloudflare_temp_mail: 'CF 临时邮箱'
             };
             return translateAppTextLocal(labels[key] || provider || '未知');
         }
@@ -281,6 +282,7 @@
                 const notificationEnabled = acc.notification_enabled !== undefined
                     ? !!acc.notification_enabled
                     : !!acc.telegram_push_enabled;
+                const isCfPoolAccount = String(acc.provider || '').toLowerCase() === 'cloudflare_temp_mail';
 
                 let tokenBadge = `<span class="badge badge-gray">IMAP</span>`;
                 if (supportsTokenRefresh) {
@@ -329,8 +331,14 @@
                             <button class="btn-icon ${notificationEnabled ? 'tg-push-active' : ''}" onclick="event.stopPropagation(); toggleTelegramPush(${acc.id}, ${!notificationEnabled})" title="${escapeHtml(translateAppTextLocal(notificationEnabled ? '该邮箱通知参与（已开启）' : '开启该邮箱通知参与'))}">🔔</button>
                             <button class="btn btn-sm btn-accent" onclick="event.stopPropagation(); copyVerificationInfo('${escapeJs(acc.email)}', this)" title="${escapeHtml(translateAppTextLocal('验证码'))}" style="font-size:0.72rem;padding:2px 8px;">🔑 ${escapeHtml(translateAppTextLocal('验证码'))}</button>
                             <button class="btn-icon" onclick="event.stopPropagation(); copyEmail('${escapeJs(acc.email)}')" title="${escapeHtml(translateAppTextLocal('复制'))}">📋</button>
-                            <button class="btn-icon" onclick="event.stopPropagation(); showEditAccountModal(${acc.id})" title="${escapeHtml(translateAppTextLocal('编辑'))}">✏️</button>
-                            <button class="btn-icon" onclick="event.stopPropagation(); deleteAccount(${acc.id}, '${escapeJs(acc.email)}')" title="${escapeHtml(translateAppTextLocal('删除'))}" style="color:var(--clr-danger);">🗑️</button>
+                            ${isCfPoolAccount
+                                ? `<button class="btn-icon" disabled title="${escapeHtml(translateAppTextLocal('邮箱池管理的账号不支持编辑'))}" style="opacity:0.3;cursor:not-allowed;">✏️</button>`
+                                : `<button class="btn-icon" onclick="event.stopPropagation(); showEditAccountModal(${acc.id})" title="${escapeHtml(translateAppTextLocal('编辑'))}">✏️</button>`
+                            }
+                            ${isCfPoolAccount
+                                ? `<button class="btn-icon" disabled title="${escapeHtml(translateAppTextLocal('邮箱池管理的账号不支持手动删除'))}" style="opacity:0.3;cursor:not-allowed;color:var(--clr-danger);">🗑️</button>`
+                                : `<button class="btn-icon" onclick="event.stopPropagation(); deleteAccount(${acc.id}, '${escapeJs(acc.email)}')" title="${escapeHtml(translateAppTextLocal('删除'))}" style="color:var(--clr-danger);">🗑️</button>`
+                            }
                         </div>
                     </div>
                 </div>
