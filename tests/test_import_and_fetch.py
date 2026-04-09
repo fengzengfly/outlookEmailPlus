@@ -1,7 +1,15 @@
 """
 完整端到端测试：模拟导入 → 验证存储 → 获取邮件
 直接调用 controller/repo 层，不走 HTTP
+
+注意：这是本地手工诊断脚本，不应被 pytest 在 collection 阶段执行。
 """
+
+if __name__ != "__main__":
+    import pytest
+
+    pytest.skip("manual live diagnostic script", allow_module_level=True)
+
 import json
 import sys
 import traceback
@@ -43,7 +51,7 @@ print("=" * 60)
 raw_lines = ACCOUNT_STR.splitlines()
 print(f"  splitlines() 结果: {len(raw_lines)} 行")
 for i, l in enumerate(raw_lines):
-    print(f"    行{i+1}: {l[:80]}...")
+    print(f"    行{i + 1}: {l[:80]}...")
 
 # 合并续行
 merged_lines = []
@@ -81,7 +89,7 @@ else:
 # ============================================================
 # 2. 测试 Refresh Token 有效性
 # ============================================================
-print(f"\n{'='*60}")
+print(f"\n{'=' * 60}")
 print("  第 2 步：测试 Refresh Token 有效性")
 print("=" * 60)
 
@@ -128,7 +136,7 @@ except Exception as e:
 # ============================================================
 # 3. 测试 Graph API 获取邮件
 # ============================================================
-print(f"\n{'='*60}")
+print(f"\n{'=' * 60}")
 print("  第 3 步：Graph API 获取邮件")
 print("=" * 60)
 
@@ -168,7 +176,7 @@ except Exception as e:
 # ============================================================
 # 4. 测试 IMAP OAuth2 (outlook.office365.com)
 # ============================================================
-print(f"\n{'='*60}")
+print(f"\n{'=' * 60}")
 print("  第 4 步：IMAP OAuth2 (outlook.office365.com)")
 print("=" * 60)
 
@@ -207,12 +215,13 @@ except Exception as e:
 # ============================================================
 # 5. 模拟存入数据库 → 再读出验证完整性
 # ============================================================
-print(f"\n{'='*60}")
+print(f"\n{'=' * 60}")
 print("  第 5 步：数据库加密存储 → 读取验证")
 print("=" * 60)
 
 try:
     from dotenv import load_dotenv
+
     load_dotenv()
     from outlook_web.security.crypto import encrypt_data, decrypt_data
 
@@ -233,8 +242,8 @@ try:
         for i in range(min(len(refresh_token), len(dec_rt))):
             if refresh_token[i] != dec_rt[i]:
                 print(f"  首个差异位置: {i}")
-                print(f"  原始: ...{refresh_token[max(0,i-5):i+20]}...")
-                print(f"  解密: ...{dec_rt[max(0,i-5):i+20]}...")
+                print(f"  原始: ...{refresh_token[max(0, i - 5) : i + 20]}...")
+                print(f"  解密: ...{dec_rt[max(0, i - 5) : i + 20]}...")
                 break
 except Exception as e:
     fail(f"加解密测试异常: {e}")
@@ -243,7 +252,7 @@ except Exception as e:
 # ============================================================
 # 6. 模拟完整 Flask 应用导入流程
 # ============================================================
-print(f"\n{'='*60}")
+print(f"\n{'=' * 60}")
 print("  第 6 步：Flask 应用内完整导入测试")
 print("=" * 60)
 
@@ -267,11 +276,17 @@ try:
 
         # 通过 repo 层直接导入
         from outlook_web.security.crypto import encrypt_data
+
         enc_pw = encrypt_data(password)
 
         result = module.add_account(
-            email, enc_pw, client_id, refresh_token,
-            group_id=1, account_type="outlook", provider="outlook",
+            email,
+            enc_pw,
+            client_id,
+            refresh_token,
+            group_id=1,
+            account_type="outlook",
+            provider="outlook",
         )
         # add_account 返回的是 accounts_repo.add_account 的结果
         # 但 web_outlook_app 没有直接暴露 add_account，需要直接用 repo
@@ -286,8 +301,13 @@ try:
             conn.close()
 
         ok_ref = accounts_repo.add_account(
-            email, password, client_id, refresh_token,
-            group_id=1, account_type="outlook", provider="outlook",
+            email,
+            password,
+            client_id,
+            refresh_token,
+            group_id=1,
+            account_type="outlook",
+            provider="outlook",
         )
         if ok_ref:
             ok("repo.add_account 写入成功")
@@ -300,6 +320,7 @@ try:
                 # load_accounts 会自动解密，但 get_account_by_email 不会
                 # 直接解密
                 from outlook_web.security.crypto import decrypt_data
+
                 if stored_rt_enc:
                     stored_rt_dec = decrypt_data(stored_rt_enc)
                 else:
@@ -330,6 +351,6 @@ except Exception as e:
     fail(f"Flask 导入测试异常: {e}")
     traceback.print_exc()
 
-print(f"\n{'='*60}")
+print(f"\n{'=' * 60}")
 print("  全部测试完成")
-print(f"{'='*60}")
+print(f"{'=' * 60}")
