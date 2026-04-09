@@ -8,6 +8,154 @@
 
 ### 操作记录
 
+#### 7. CF临时邮箱接入邮箱池：Phase 1-3 实现 + 部分测试通过
+
+**时间**：2026-04-09
+
+**目标**：实现 CF 临时邮箱接入邮箱池的核心链路（动态创建 claim + 智能删除 complete）。
+
+**实际完成内容**：
+
+**Phase 1: DB Schema v19** ✅
+- `outlook_web/db.py`：`DB_SCHEMA_VERSION = 19`，新增 `temp_mail_meta TEXT` 列
+- 迁移幂等：重复启动不报错
+- 新增唯一索引 `idx_pool_claim_token`、`idx_pool_tasks_unique`
+
+**Phase 2: Pool - claim 动态创建** ✅
+- `outlook_web/repositories/pool.py`：
+  - 新增 `insert_claimed_account()` — 纯 DB 写入（INSERT accounts + claim_log + project_usage）
+  - 移除了对 `services.temp_mail_provider_cf` 的违规导入（架构修复）
+- `outlook_web/services/pool.py`：
+  - 新增 `_create_cf_mailbox_for_pool()` — 调用 CF Provider 创建邮箱
+  - 新增 `_delete_cf_mailbox_nonblocking()` — 非阻塞删除远程 CF 邮箱
+  - `claim_random()` 增强：池空且 provider=cloudflare_temp_mail 时动态创建
+  - Provider 白名单校验：None/'' + 现有 provider + cloudflare_temp_mail
+
+**Phase 3: Pool - complete 智能删除** ✅
+- `services/pool.py` `complete_claim()` 增强：
+  - 事务提交后判断 `result in ('success', 'credential_invalid')` 才调用远程删除
+  - 删除失败非阻塞：仅 warning 日志，不影响本地状态流转
+  - 其他 result（timeout/network_error/provider_blocked）不触发删除
+
+**Phase 5 部分测试** ✅
+- `tests/test_module_boundaries.py`：3/3 通过（验证 repositories 不依赖 services）
+- `tests/test_pool_cf_integration_tdd_skeleton.py`：18/18 通过
+- `tests/test_pool.py`：全部通过（Repository + Service + API）
+- `tests/test_pool_flow_suite.py`：全部通过
+- Pool 相关 70 测试总耗时 4.4s，0 failures
+- 全量测试套件无 FAIL、无 ERROR
+
+**修改文件清单**：
+- `outlook_web/db.py` — Schema v19 迁移（+143 行）
+- `outlook_web/repositories/pool.py` — 新增 `insert_claimed_account()`，移除 CF 导入（+155 行）
+- `outlook_web/services/pool.py` — CF 动态创建/删除逻辑（+219 行）
+- `tests/test_db_migration_task_token_unique.py` — 适配新迁移
+- `tests/test_pool.py` — 新增 CF 相关 Service/Repository 测试（+153 行）
+- `tests/test_pool_flow_suite.py` — 适配增强逻辑（+51 行）
+- `tests/test_pool_cf_integration_tdd_skeleton.py` — **新增** 18 个 TDD 骨架测试
+
+**架构约束验证**：
+- Route → Controller → Service → Repository 分层严格保持
+- Repository 层不依赖任何 Service（包括 temp_mail_provider_cf）
+- CF 上游调用（create_mailbox / delete_mailbox）全部在 Service 层
+
+**待完成**：
+- ~~Phase 0: 文档对齐收尾（PRD/FD/TD 接口名/schema 版本）~~ ✅ 已完成
+- Phase 4: external 读信链路适配（mailbox_resolver 识别 CF pool 账号）
+- Phase 5: 补充 external 读信链路测试、DB v19 迁移测试
+- Phase 6: 联调与验收
+
+#### 7b. Phase 0 文档对齐收尾
+
+**时间**：2026-04-09
+
+**操作内容**：
+- PRD：6 处修改
+  - `§2.4.1` 标题和所有 `/claim` 引用 → `claim-random`
+  - "加密存储" → "明文 JSON 存储"（JWT 已签名，本期不额外加密）
+- FD：3 处修改
+  - 数据流图和参考资料中 `/claim` → `claim-random`
+- TD：4 处修改
+  - `Schema v18` → `Schema v19`
+  - 所有 `/claim` 引用 → `claim-random`
+- TODO：Phase 0 任务全部标记为 `[x]`
+
+---
+
+#### 4. CF临时邮箱接入邮箱池：文档补齐 + TDD 编写
+
+**时间**：2026-04-09
+
+**目标**：按“文档先行”流程补齐该功能的文档链路，并在进入实现前完成 TDD（测试设计文档）。
+
+**本次实际操作**：
+
+- 确认 PRD 已存在：`docs/PRD/2026-04-09-CF临时邮箱接入邮箱池PRD.md`
+- 编写/补齐（当前工作区内为未提交状态）：
+  - `docs/FD/2026-04-09-CF临时邮箱接入邮箱池FD.md`
+  - `docs/TD/2026-04-09-CF临时邮箱接入邮箱池TD.md`
+  - `docs/TDD/2026-04-09-CF临时邮箱接入邮箱池-TDD.md`
+
+**关键内容**：
+
+- 明确测试目标：动态创建、智能删除、兼容不破坏、外部 API 契约稳定
+- 明确测试分层：Repository → Service → Controller →（可选）external 读信链路
+- 明确 Mock 策略：禁止真实网络，统一 patch `CloudflareTempMailProvider.*`
+
+**对话规范**：后续需求确认/方案选择/完成前反馈，统一通过“寸止 MCP”进行。
+
+#### 5. 文档与代码现状对齐：schema 版本与项目地图修正
+
+**时间**：2026-04-09
+
+**目标**：在“充分阅读源代码”后，将仓库内关键说明文档与代码现状对齐，并记录本次操作。
+
+**本次实际操作**：
+
+- 对照源码确认：
+  - `outlook_web/__init__.py` 版本号为 `1.13.0`
+  - `outlook_web/db.py` 当前 `DB_SCHEMA_VERSION = 19`（含 v18: accounts 新增 `temp_mail_meta`）
+- 修正文档不一致处：
+  - `CLAUDE.md`：
+    - `outlook_web/__init__.py` 版本号注释 `v1.12.0` → `v1.13.0`
+    - `db.py` schema 注释 `v18` → `v19`
+    - Database 章节 `schema v18` → `schema v19`
+  - `docs/项目地图.md`：
+    - “凭据加密（schema v18）” → “（schema v19）”
+    - “数据库迁移框架（v18）” → “（v19）”
+
+**说明**：本次仅做“事实对齐”的最小改动，不调整原有结构与叙事。
+
+#### 6. 深读主链路源码并对齐 CF 邮箱池文档（external_pool 路由实际为 claim-random/claim-complete）
+
+**时间**：2026-04-09
+
+**目标**：按“以源码为准”的原则深读邮箱池/CF Provider/外部 API 安全链路，并将 FD/TD 文档中的接口路径与行为描述对齐到当前实现。
+
+**本次实际操作（可核对点）**：
+
+- 深读源码文件（节选）：
+  - `outlook_web/routes/external_pool.py`：外部邮箱池路由实际为
+    - `POST /api/external/pool/claim-random`
+    - `POST /api/external/pool/claim-release`
+    - `POST /api/external/pool/claim-complete`
+    - `GET  /api/external/pool/stats`
+  - `outlook_web/controllers/external_pool.py`：claim-random/complete/release 的参数透传与 audit 逻辑
+  - `outlook_web/security/external_api_guard.py`：公网模式下的 IP 白名单、限流、功能开关（feature 禁用）
+  - `outlook_web/repositories/pool.py`：provider=cloudflare_temp_mail 时无可用邮箱会动态创建；complete 后按结果非阻塞删除远程 CF 邮箱
+  - `outlook_web/services/temp_mail_provider_cf.py`：CF Worker API 适配（x-admin-auth / Bearer jwt），meta 标准化（provider_jwt/provider_mailbox_id/provider_capabilities）
+
+- 文档对齐改动：
+  - `docs/FD/2026-04-09-CF临时邮箱接入邮箱池FD.md`
+    - 将 `/api/external/pool/claim` 对齐为实际路由 `/api/external/pool/claim-random`
+    - 将 `/api/external/pool/complete` 对齐为实际路由 `/api/external/pool/claim-complete`
+    - 修正“邮件读取已支持无需改动”的表述，避免与当前 resolver 行为产生误导
+  - `docs/TD/2026-04-09-CF临时邮箱接入邮箱池TD.md`
+    - 将 external pool 章节中的 `/claim`、`/complete` 路由对齐为 `/claim-random`、`/claim-complete`
+    - 将 complete 响应示例调整为“以 controller 实现为准”的兼容表述
+
+**说明**：本次仍坚持“最小必要改动”，只修正与源码不一致的接口路径与高风险误导点。
+
 #### 3. 分支同步与联系方式添加
 
 **时间**：2026-04-09

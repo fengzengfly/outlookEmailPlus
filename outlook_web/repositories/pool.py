@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import json
+import logging
 import secrets
 import sqlite3
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional
+
+logger = logging.getLogger(__name__)
 
 RESULT_TO_POOL_STATUS: Dict[str, str] = {
     "success": "used",
@@ -12,6 +16,14 @@ RESULT_TO_POOL_STATUS: Dict[str, str] = {
     "credential_invalid": "retired",
     "network_error": "available",
 }
+
+
+class PoolRepositoryError(Exception):
+    """Repository 层业务错误，包含错误码。"""
+
+    def __init__(self, message: str, error_code: str):
+        super().__init__(message)
+        self.error_code = error_code
 
 
 def _utcnow() -> datetime:
@@ -24,6 +36,141 @@ def _parse_claimed_by(claimed_by: Optional[str]) -> tuple[str, str]:
         return "", ""
     parts = (claimed_by or ":").split(":", 1)
     return parts[0], parts[1] if len(parts) > 1 else ""
+
+
+def insert_claimed_account(
+    conn: sqlite3.Connection,
+    *,
+    email: str,
+    caller_id: str,
+    task_id: str,
+    lease_seconds: int,
+    provider: str,
+    account_type: str = "temp_mail",
+    project_key: Optional[str] = None,
+    temp_mail_meta: Optional[dict] = None,
+    claim_log_detail: str = "动态创建",
+) -> dict:
+    """插入一个新账号并直接标记为 claimed（供 Service 层动态创建邮箱后写入池）。
+
+    - Repository 层不允许依赖 services，因此这里仅做 DB 写入，不做任何上游网络调用。
+    - 该函数内部包含 BEGIN IMMEDIATE / COMMIT。
+    """
+
+    normalized_email = str(email or "").strip()
+    if not normalized_email:
+        raise PoolRepositoryError("email 不能为空", "invalid_email")
+
+    # 提取 email_domain
+    extracted_domain = ""
+    if "@" in normalized_email:
+        extracted_domain = normalized_email.split("@", 1)[1].strip().lower()
+
+    # 生成 claim_token
+    now_str = _utcnow().isoformat() + "Z"
+    lease_expires_at_str = (
+        _utcnow() + timedelta(seconds=lease_seconds)
+    ).isoformat() + "Z"
+    token = "clm_" + secrets.token_urlsafe(9)
+
+    # 序列化 meta（明文 JSON）
+    meta_obj = temp_mail_meta or {}
+    if isinstance(meta_obj, str):
+        temp_mail_meta_json = meta_obj
+    else:
+        temp_mail_meta_json = (
+            json.dumps(meta_obj, ensure_ascii=False) if meta_obj else "{}"
+        )
+
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+
+        cursor = conn.execute(
+            """
+            INSERT INTO accounts (
+                email, password, client_id, refresh_token,
+                account_type, provider, status,
+                pool_status, claimed_by, claimed_at, lease_expires_at, claim_token,
+                last_claimed_at, temp_mail_meta, email_domain,
+                created_at, updated_at
+            ) VALUES (?, '', '', '',
+                      ?, ?, 'active',
+                      'claimed', ?, ?, ?, ?,
+                      ?, ?, ?,
+                      ?, ?)
+            """,
+            (
+                normalized_email,
+                account_type,
+                provider,
+                f"{caller_id}:{task_id}",
+                now_str,
+                lease_expires_at_str,
+                token,
+                now_str,
+                temp_mail_meta_json,
+                extracted_domain,
+                now_str,
+                now_str,
+            ),
+        )
+        account_id = cursor.lastrowid
+
+        conn.execute(
+            """
+            INSERT INTO account_claim_logs
+                (account_id, claim_token, caller_id, task_id, action, result, detail, created_at)
+            VALUES (?, ?, ?, ?, 'claim', NULL, ?, ?)
+            """,
+            (account_id, token, caller_id, task_id, claim_log_detail, now_str),
+        )
+
+        # project_key 存在时写入 project usage
+        if project_key and caller_id:
+            conn.execute(
+                """
+                INSERT INTO account_project_usage
+                    (account_id, consumer_key, project_key, first_claimed_at, last_claimed_at)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(account_id, consumer_key, project_key)
+                DO UPDATE SET last_claimed_at = excluded.last_claimed_at
+                """,
+                (account_id, caller_id, project_key, now_str, now_str),
+            )
+
+        conn.execute("COMMIT")
+
+        logger.info(
+            "[pool] 动态插入账号并 claim: %s (provider=%s, account_id=%s)",
+            normalized_email,
+            provider,
+            account_id,
+        )
+
+        return {
+            "id": account_id,
+            "email": normalized_email,
+            "provider": provider,
+            "account_type": account_type,
+            "pool_status": "claimed",
+            "claim_token": token,
+            "claimed_at": now_str,
+            "lease_expires_at": lease_expires_at_str,
+            "temp_mail_meta": temp_mail_meta_json,
+            "email_domain": extracted_domain,
+        }
+    except sqlite3.IntegrityError as e:
+        try:
+            conn.execute("ROLLBACK")
+        except Exception:
+            pass
+        raise PoolRepositoryError(f"插入账号失败: {e}", "db_integrity_error") from e
+    except Exception as e:
+        try:
+            conn.execute("ROLLBACK")
+        except Exception:
+            pass
+        raise PoolRepositoryError(f"插入账号失败: {e}", "db_error") from e
 
 
 def claim_atomic(
@@ -65,7 +212,9 @@ def claim_atomic(
             params.append(tag_name)
 
     if exclude_recent_minutes and exclude_recent_minutes > 0:
-        cutoff = (_utcnow() - timedelta(minutes=exclude_recent_minutes)).isoformat() + "Z"
+        cutoff = (
+            _utcnow() - timedelta(minutes=exclude_recent_minutes)
+        ).isoformat() + "Z"
         sql += " AND (a.last_claimed_at IS NULL OR a.last_claimed_at < ?)"
         params.append(cutoff)
 
@@ -97,7 +246,9 @@ def claim_atomic(
         return None
 
     now_str = _utcnow().isoformat() + "Z"
-    lease_expires_at_str = (_utcnow() + timedelta(seconds=lease_seconds)).isoformat() + "Z"
+    lease_expires_at_str = (
+        _utcnow() + timedelta(seconds=lease_seconds)
+    ).isoformat() + "Z"
     token = "clm_" + secrets.token_urlsafe(9)
 
     conn.execute(

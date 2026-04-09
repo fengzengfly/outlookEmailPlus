@@ -30,31 +30,41 @@ class PoolFlowSuiteTests(unittest.TestCase):
             settings_repo.set_setting("external_api_ip_whitelist", "[]")
             settings_repo.set_setting("external_api_rate_limit_per_minute", "60")
             settings_repo.set_setting("external_api_disable_pool_claim_random", "false")
-            settings_repo.set_setting("external_api_disable_pool_claim_release", "false")
-            settings_repo.set_setting("external_api_disable_pool_claim_complete", "false")
+            settings_repo.set_setting(
+                "external_api_disable_pool_claim_release", "false"
+            )
+            settings_repo.set_setting(
+                "external_api_disable_pool_claim_complete", "false"
+            )
             settings_repo.set_setting("external_api_disable_pool_stats", "false")
 
     @staticmethod
     def _auth_headers():
         return {"X-API-Key": "abc123"}
 
-    def _make_pool_account(self, *, provider: str = "outlook", pool_status: str = "available") -> dict:
+    def _make_pool_account(
+        self,
+        *,
+        provider: str = "outlook",
+        pool_status: str = "available",
+        email_domain: str = "poolflow.test",
+    ) -> dict:
         conn = self.create_conn()
         try:
-            email_addr = f"flow_{uuid.uuid4().hex}@poolflow.test"
+            email_addr = f"flow_{uuid.uuid4().hex}@{email_domain}"
             conn.execute(
                 """
                 INSERT INTO accounts (
                     email, client_id, refresh_token, status,
-                    account_type, provider, group_id, pool_status
+                    account_type, provider, group_id, pool_status, email_domain
                 )
-                VALUES (?, 'test_client', 'test_token', 'active', 'outlook', ?, 1, ?)
+                VALUES (?, 'test_client', 'test_token', 'active', 'outlook', ?, 1, ?, ?)
                 """,
-                (email_addr, provider, pool_status),
+                (email_addr, provider, pool_status, email_domain),
             )
             conn.commit()
             row = conn.execute(
-                "SELECT id, email, pool_status, provider FROM accounts WHERE email = ?",
+                "SELECT id, email, pool_status, provider, email_domain FROM accounts WHERE email = ?",
                 (email_addr,),
             ).fetchone()
             return dict(row)
@@ -146,10 +156,11 @@ class PoolFlowSuiteTests(unittest.TestCase):
             conn.close()
 
     def test_multiple_consecutive_claims_do_not_repeat_accounts(self):
-        provider = f"suiteprov_{uuid.uuid4().hex}"
+        # 使用唯一的 email_domain 隔离测试数据
+        email_domain = f"multi_{uuid.uuid4().hex[:8]}.test"
         created_ids = []
         for _ in range(3):
-            created = self._make_pool_account(provider=provider)
+            created = self._make_pool_account(email_domain=email_domain)
             created_ids.append(created["id"])
 
         claimed_ids = []
@@ -161,7 +172,7 @@ class PoolFlowSuiteTests(unittest.TestCase):
                 json={
                     "caller_id": "suite_bot",
                     "task_id": f"batch_claim_{idx}",
-                    "provider": provider,
+                    "email_domain": email_domain,  # 使用 email_domain 过滤
                 },
             )
             self.assertEqual(resp.status_code, 200)
@@ -227,8 +238,9 @@ class PoolFlowSuiteTests(unittest.TestCase):
 
     def test_claim_with_project_key_prevents_same_project_reuse(self):
         """PR#27: 同 caller_id + project_key 下，同一账号不应被再次领取。"""
-        provider = f"proj_{uuid.uuid4().hex}"
-        acct = self._make_pool_account(provider=provider)
+        # 使用唯一的 email_domain 隔离测试数据
+        email_domain = f"proj_{uuid.uuid4().hex[:8]}.test"
+        acct = self._make_pool_account(email_domain=email_domain)
         account_id = acct["id"]
 
         # 第一次领取
@@ -238,7 +250,7 @@ class PoolFlowSuiteTests(unittest.TestCase):
             json={
                 "caller_id": "proj_bot",
                 "task_id": "proj_task_1",
-                "provider": provider,
+                "email_domain": email_domain,  # 使用 email_domain 过滤
                 "project_key": "project_alpha",
             },
         )
@@ -278,7 +290,7 @@ class PoolFlowSuiteTests(unittest.TestCase):
             json={
                 "caller_id": "proj_bot",
                 "task_id": "proj_task_2",
-                "provider": provider,
+                "email_domain": email_domain,  # 使用 email_domain 过滤
                 "project_key": "project_alpha",
             },
         )
@@ -290,8 +302,9 @@ class PoolFlowSuiteTests(unittest.TestCase):
 
     def test_claim_with_different_project_key_allows_reuse(self):
         """PR#27: 不同 project_key 下，同一账号可以被再次领取。"""
-        provider = f"proj2_{uuid.uuid4().hex}"
-        acct = self._make_pool_account(provider=provider)
+        # 使用唯一的 email_domain 隔离测试数据
+        email_domain = f"proj2_{uuid.uuid4().hex[:8]}.test"
+        acct = self._make_pool_account(email_domain=email_domain)
         account_id = acct["id"]
 
         # 第一次领取（project_beta）
@@ -301,7 +314,7 @@ class PoolFlowSuiteTests(unittest.TestCase):
             json={
                 "caller_id": "proj_bot",
                 "task_id": "pb_task_1",
-                "provider": provider,
+                "email_domain": email_domain,  # 使用 email_domain 过滤
                 "project_key": "project_beta",
             },
         )
@@ -338,7 +351,7 @@ class PoolFlowSuiteTests(unittest.TestCase):
             json={
                 "caller_id": "proj_bot",
                 "task_id": "pg_task_1",
-                "provider": provider,
+                "email_domain": email_domain,  # 使用 email_domain 过滤
                 "project_key": "project_gamma",
             },
         )
