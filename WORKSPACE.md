@@ -6,6 +6,120 @@
 
 ## 2026-04-11
 
+### 0x. PR #36 分析 → 性能埋点 → AUTH_EXPIRED Bug 修复（本次会话）
+
+**时间**：2026-04-11
+
+**背景**：用户要求分析 PR #36（EucalyZ/outlookEmailPlus:dev → ZeroPointSix/outlookEmailPlus:main），判断是否应合并。
+
+**本次实际动作**：
+
+1. **PR #36 分析与拒绝**：
+   - 分析发现 6 个关键问题、4 个中等问题（SSE 缺少 account_type 路由、无界缓存、XSS 风险等）
+   - 向 PR 提交拒绝评论（issuecomment-4229331624）
+   - 创建内部优化 PRD: `docs/PRD/2026-04-11-邮件获取性能优化PRD.md`（v1.1）
+
+2. **全链路性能埋点**（commit `1dba74c`）：
+   - 在 `outlook_web/controllers/emails.py` 添加 72 行 `[PERF]` 性能埋点
+   - 覆盖 `api_get_emails`、`api_get_email_detail`、`api_extract_verification` 三个核心函数
+   - 在 `outlook_web/services/imap.py` 添加 IMAP SEARCH/FETCH/结果诊断日志
+
+3. **发现并修复 AUTH_EXPIRED Bug**：
+   - **问题**：`extract_verification` 在收件箱为空时误报 `ACCOUNT_AUTH_EXPIRED`（401），实际应返回 `EMAIL_NOT_FOUND`（404）
+   - **根因**：IMAP 连接成功但返回空邮件时，`graph_auth_expired` 标志"污染"了最终错误判断
+   - **修复**：增加 `imap_connected` 追踪，仅当 Graph 和 IMAP 都失败时才报 AUTH_EXPIRED
+   - **日志证据**：`imap_search | total=0 (空信箱)` + `imap_new | success=True | count=0` → 误报 AUTH_EXPIRED
+   - **BUG 文档**：`docs/BUG/2026-04-11-验证码提取-空信箱误报AUTH_EXPIRED-BUG.md`
+
+4. **PERF 日志生产环境控制**：
+   - 所有 `[PERF]` 日志从 `INFO` 降级为 `DEBUG`
+   - 新增 `PERF_LOGGING=true` 环境变量控制（`outlook_web/app.py`）
+   - 生产环境默认不输出，开发时设置环境变量即可开启
+
+**修改文件清单**：
+| 文件 | 变更 |
+|------|------|
+| `outlook_web/controllers/emails.py` | 性能埋点 + `imap_connected` Bug 修复 + 日志 DEBUG 降级 |
+| `outlook_web/services/imap.py` | IMAP 搜索/FETCH 诊断日志 |
+| `outlook_web/app.py` | `PERF_LOGGING` 环境变量支持 |
+| `docs/PRD/2026-04-11-邮件获取性能优化PRD.md` | 性能优化 PRD v1.2（加入实测数据 + IMAP 连接复用 P0） |
+| `docs/BUG/2026-04-11-验证码提取-空信箱误报AUTH_EXPIRED-BUG.md` | Bug 分析文档 |
+
+**性能数据摘要**（从日志采集）：
+
+| 账号场景 | 链路 | 耗时 | 备注 |
+|----------|------|------|------|
+| Terrance (preferred_channel=imap_new) | IMAP fetch + IMAP detail | 8.5-9.7s | 最优路径 |
+| Troy (无 preferred_channel) | Graph×2 + IMAP×2 + detail IMAP | 15.5s | 完整回退链 |
+| Laurie (全部失败) | Graph×2 + IMAP×2 | 14.5s | 账号失效 |
+
+**下一步**：性能优化（IMAP 连接 4-5s 是主要瓶颈）
+
+5. **PRD v1.2 更新**（续 session）：
+   - 加入实测 `[PERF]` 埋点数据，标注已完成的 P0 项（渠道记忆 `21298b6`、IMAP 回退 `ed48929`）
+   - 新增 3.1.2 "IMAP 连接复用"（从 Out of Scope 升级为 P0，最大单点收益 ~4-5s）
+   - 新增 3.1.3 "IMAP OAuth Token 短期缓存"
+   - 优先级矩阵加入"状态"列，区分已完成/待实施
+   - 更新预期优化效果表：验证码提取目标从 8.5s → 4s
+
+6. **PRD v1.3 + FD v1.0**（续 session）：
+   - 分析 Web 端 vs 外部 API 验证码提取路径差异（600 行 vs 130 行）
+   - 确认方案 B：统一两条路径（重构 + 优化一起做）
+   - PRD v1.3 新增 3.1.0 "验证码提取路径统一"重构前置需求
+   - 创建 FD: `docs/FD/2026-04-11-邮件获取性能优化FD.md`（v1.0）
+   - FD 覆盖：路径统一 + 6 项性能优化的系统行为设计、接口契约、文件清单
+   - 更新预期优化效果表：验证码提取目标从 8.5s → 4s
+
+7. **TDD v1.0 + 43 测试用例**（续 session）：
+   - 深度分析全部 6+ 验证码提取入口的行为差异
+   - 发现 3 个关键行为不一致：`apply_confidence_gate`（Web 缺失）、`enforce_mutual_exclusion`（Web=True/External=False）、filter 能力差异
+   - 创建 TDD: `docs/TDD/2026-04-11-邮件获取性能优化-TDD.md`（v1.0）
+   - 创建 6 个测试文件共 43 个测试用例（TDD red phase）：
+     - `tests/test_imap_token_cache.py` — A 层：8 cases
+     - `tests/test_graph_permission_precheck.py` — B 层：9 cases
+     - `tests/test_imap_connection_reuse.py` — C 层：7 cases
+     - `tests/test_channel_capability_cache.py` — D 层：8 cases
+     - `tests/test_imap_batch_fetch.py` — E 层：5 cases
+     - `tests/test_imap_concurrent_servers.py` — F 层：6 cases
+
+8. **TD v1.0 技术设计**（续 session）：
+   - 创建 TD: `docs/TD/2026-04-11-邮件获取性能优化TD.md`（v1.0）
+   - 覆盖 7 项核心技术决策（统一函数位置、连接复用粒度、Token 缓存作用域、通道缓存独立模块、批量 FETCH 解析、并发取消策略）
+   - 详细设计：统一入口函数签名与伪代码、IMAP 组合函数、Token 缓存线程安全、Graph scope 解析、通道缓存模块、批量 FETCH 响应解析、并发双服务器竞速
+   - 三阶段实施顺序：Phase 1 基础设施 → Phase 2 IMAP 优化 → Phase 3 路径统一
+   - 兼容性/回滚/降级策略分析
+
+**新增文件清单（7-8 步）**：
+| 文件 | 变更 |
+|------|------|
+| `docs/TDD/2026-04-11-邮件获取性能优化-TDD.md` | 测试设计文档 v1.0 |
+| `docs/TD/2026-04-11-邮件获取性能优化TD.md` | 技术设计文档 v1.0 |
+| `tests/test_imap_token_cache.py` | Token 缓存测试（8 cases） |
+| `tests/test_graph_permission_precheck.py` | Graph 权限预检测试（9 cases） |
+| `tests/test_imap_connection_reuse.py` | IMAP 连接复用测试（7 cases） |
+| `tests/test_channel_capability_cache.py` | 通道能力缓存测试（8 cases） |
+| `tests/test_imap_batch_fetch.py` | 批量 FETCH 测试（5 cases） |
+| `tests/test_imap_concurrent_servers.py` | 并发双服务器测试（6 cases） |
+
+9. **四文档联调对齐**（续 session）：
+   - 发现并修复 6 项文档间不一致：
+     - TDD B层矩阵缺 3 个用例（G-07/G-08/G-09） → 补齐至 9 cases
+     - TDD C层 R-04 用例名与实际测试不一致 → 更名为 `test_token_failure_no_connection`
+     - TDD D层矩阵缺 C-08（`test_filter_no_cache_returns_all`） → 补齐至 8 cases
+     - TDD F层 P-05/P-06 用例名与实际测试不一致 → 更名匹配
+     - FD 缺少 TD/TDD 关联引用 → 补充
+     - FD 缺少行为变更说明（`apply_confidence_gate`/`enforce_mutual_exclusion` 统一后的影响） → 补充
+   - 四文档版本对齐：PRD v1.3 ← FD v1.1 ← TD v1.0 ← TDD v1.1
+   - 四文档交叉引用补全
+
+**文档联调变更清单**：
+| 文件 | 变更 |
+|------|------|
+| `docs/PRD/2026-04-11-邮件获取性能优化PRD.md` | 补充 FD/TD/TDD 关联引用 |
+| `docs/FD/2026-04-11-邮件获取性能优化FD.md` | v1.0→v1.1：补 TD/TDD 引用、增行为变更说明 |
+| `docs/TDD/2026-04-11-邮件获取性能优化-TDD.md` | v1.0→v1.1：补 TD 引用、同步测试矩阵与实际文件 |
+| `docs/TD/2026-04-11-邮件获取性能优化TD.md` | 更新关联版本号 FD v1.1/TDD v1.1 |
+
 ### 0w. 按用户要求执行全量回归 + 提交前文档对齐（本次会话）
 
 **时间**：2026-04-11
