@@ -4,6 +4,113 @@
 
 ---
 
+## 2026-04-12
+
+### 0x. 性能优化真实环境 A/B 对照（main vs dev-5.3Codex）+ 文档回填（本次会话）
+
+**时间**：2026-04-12
+
+**背景**：
+
+1. 用户要求确认“优化是否真实有效”，而不是只看单元测试通过。
+2. 用户明确要求：
+   - 代码使用 `dev-5.3Codex`；
+   - 数据库复用 `main` 侧真实库；
+   - 启动方式仅允许后台独立进程，不允许前台阻塞式运行。
+
+**本次实际动作**：
+
+1. 运行环境统一：
+   - 配置来源：`E:\hushaokang\Data-code\outlookEmail\.env`
+   - 数据库：`E:\hushaokang\Data-code\outlookEmail\data\outlook_accounts.db`
+   - 端口：`5000`
+   - 变量：`PERF_LOGGING=true`、`SCHEDULER_AUTOSTART=false`
+2. A/B 对照执行（同账号、同接口、同数据库）：
+   - 接口：`GET /api/emails/{email}/extract-verification`
+   - 账号：`HeatherWatson9399@outlook.com`、`KimMyers4896@outlook.com`
+   - each 分支各 6 次样本
+3. 日志验证：
+   - 成功读取 `[PERF] extract_verification | ... | 总耗时=...ms`
+   - 确认性能埋点代码仍存在，并未丢失。
+
+**A/B 结果摘要**：
+
+| 分支 | 样本量 | 平均值 | 最小值 | 最大值 |
+|------|--------|--------|--------|--------|
+| main | 6 | 6910ms | 5141ms | 9208ms |
+| dev-5.3Codex | 6 | 5309ms | 4220ms | 8109ms |
+
+**结论**：
+
+1. 优化有效：平均耗时下降约 **23.2%**。
+2. 但当前仍未稳定达到 `≤4s`（best 约 4.22s，存在 8s+ 长尾）。
+3. 当前判断应为：**“策略有效，但尚未完全达标”**。
+
+**本次同步更新文档**：
+
+| 文件 | 变更 |
+|------|------|
+| `docs/FD/2026-04-11-邮件获取性能优化FD.md` | 升级 v1.2，新增“实测状态回填（2026-04-12）” |
+| `docs/TD/2026-04-11-邮件获取性能优化TD.md` | 升级 v1.1，新增“实测对照记录（2026-04-12）” |
+| `docs/TDD/2026-04-11-邮件获取性能优化-TDD.md` | 升级 v1.2，新增“真实环境 A/B 性能对照补充” |
+
+---
+
+### 0y. 新增单策略 PRD：Graph Top-N 下调（本次会话）
+
+**时间**：2026-04-12
+
+**背景**：
+
+1. 用户确认“可以单独做第三点策略”（Graph 列表窗口下调）。
+2. 目标是在不引入高风险行为变更前提下继续压缩提取耗时。
+
+**本次实际动作**：
+
+1. 新建独立 PRD：
+   - `docs/PRD/2026-04-12-验证码提取提速P0-GraphTopN策略PRD.md`
+2. PRD 明确内容：
+   - 范围仅覆盖 Top-N 策略
+   - 固定值 `top=3`（不做配置化）
+   - 不改对外接口契约
+   - 风险（漏检概率）与回滚（改回 20）
+   - 验收指标（成功率/NOT_FOUND 比例/P50-P95）
+
+**结论**：
+
+1. 该策略复杂度低、改造边界清晰，适合作为下一步 P0 低风险增量。
+2. 后续可在同一 A/B 口径下再次验证增益并回填 FD/TD/TDD。
+
+### 0z. Top-N 策略落地（固定 top=3，非配置化）
+
+**时间**：2026-04-12
+
+**背景**：用户确认“不需要可配置，直接固定为 3”。
+
+**本次实际动作**：
+
+1. 代码改动：
+   - 文件：`outlook_web/services/verification_channel_routing.py`
+   - 新增常量：`VERIFICATION_FETCH_TOP = 3`
+   - 统一链路调用处由 `top=20` 改为 `top=VERIFICATION_FETCH_TOP`
+2. 文档联动：
+   - 更新 PRD：`docs/PRD/2026-04-12-验证码提取提速P0-GraphTopN策略PRD.md`
+     - 从“可配置化”改为“固定 top=3”
+   - 更新 FD/TD/TDD：补充本会话决议与后续验证项
+
+**结论**：
+
+1. 该改动为小范围低复杂度变更。
+2. 下一步执行针对性回归 + 实测采样，确认是否进一步降低平均耗时和长尾。
+
+**执行结果回填（同日）**：
+
+1. 回归：`python -m unittest tests.test_verification_channel_memory_v1 tests.test_external_api.ExternalApiVerificationErrorTests tests.test_web_graph_auth_fallback tests.test_extract_verification_group_policy` → 22/22 通过。
+2. 真实采样（固定 top=3）出现多次 `404`，且平均耗时上升至约 10s+，长尾达 20s 级。
+3. 结论：固定 `top=3` 不满足当前上线条件，需暂缓并回退/改方案。
+
+---
+
 ## 2026-04-11
 
 ### 0x. PR #36 分析 → 性能埋点 → AUTH_EXPIRED Bug 修复（本次会话）
