@@ -6,6 +6,34 @@ All notable changes to OutlookMail Plus are documented in this file.
 
 （暂无）
 
+## [v1.15.1] - 2026-04-12
+
+### 新增功能
+
+- 无新增业务功能。
+
+### 修复
+
+- 修复 CI 格式化门禁失败：对仓库代码执行 `black` / `isort` 全量对齐，消除 `Code Quality` 与 `docker-build-push` 前置 `quality-gate` 阻断。
+- 恢复主干构建发布链路：`Build and Push Docker Image` 在 `main` 分支重新通过，镜像推送流程恢复稳定。
+
+### 重要变更
+
+- 版本号由 `1.15.0` 升级至 `1.15.1`，用于补齐“版本标签镜像”发布链路，与已修复的主干 CI 状态保持一致。
+
+### 测试/验证
+
+- 本地格式化校验：
+  - `python -m black --check outlook_web tests web_outlook_app.py outlook_mail_reader.py start.py` ✅
+  - `python -m isort --check-only --profile black outlook_web tests web_outlook_app.py outlook_mail_reader.py start.py` ✅
+- 本地回归抽检：
+  - `python -m pytest -q tests/test_version_update.py tests/test_i18n_settings_completeness.py` → `71 passed`
+- 远端 CI（`main` / commit `61208e0`）全绿：
+  - `Build and Push Docker Image` ✅
+  - `Code Quality` ✅
+  - `Python Tests` ✅
+  - `SonarCloud Scan` ✅
+
 ## [v1.15.0] - 2026-04-12
 
 ### 新增功能

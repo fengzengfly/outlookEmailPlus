@@ -1,5 +1,34 @@
 # DEVLOG
 
+## v1.15.1 - CI 质量门禁修复与发布链路恢复
+
+发布日期：2026-04-12
+
+### 新增功能
+
+- 无新增业务功能。
+
+### 修复
+
+- 修复 `Code Quality` 中 `black/isort` 格式化门禁失败问题，统一对齐仓库格式规范。
+- 修复 `Build and Push Docker Image` 被前置 `quality-gate` 阻断的问题，恢复主干镜像构建与推送能力。
+
+### 重要变更
+
+- 版本号由 `1.15.0` 升级为 `1.15.1`，用于补齐版本标签镜像发布链路，确保版本发布与主干 CI 状态一致。
+
+### 测试/验证
+
+- 格式化校验：
+  - `python -m black --check outlook_web tests web_outlook_app.py outlook_mail_reader.py start.py` ✅
+  - `python -m isort --check-only --profile black outlook_web tests web_outlook_app.py outlook_mail_reader.py start.py` ✅
+- 回归抽检：`python -m pytest -q tests/test_version_update.py tests/test_i18n_settings_completeness.py` → `71 passed`
+- GitHub Actions（main / commit `61208e0`）验证通过：
+  - `Build and Push Docker Image` ✅
+  - `Code Quality` ✅
+  - `Python Tests` ✅
+  - `SonarCloud Scan` ✅
+
 ## v1.15.0 - 验证码提取链路优化与设置页 i18n 补齐
 
 发布日期：2026-04-12
