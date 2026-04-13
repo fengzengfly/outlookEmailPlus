@@ -8,6 +8,26 @@
 
 ### 操作记录
 
+#### 37. 修正 v1.16.0 Release 文案口径（产物状态）
+
+**时间**：2026-04-13
+
+**本次操作**：
+
+1. 核对 Release 页面当前文案
+   - 发现 `v1.16.0` Release 中仍保留“源码 zip 失败”旧描述
+
+2. 更新 Release 正文
+   - 使用 `gh release edit v1.16.0 --notes-file ...` 覆盖发布日志
+   - 将“`outlookEmailPlus-v1.16.0-src.zip` 失败”修正为“成功”
+
+3. 结果确认
+   - Release 页面已更新：
+     - `https://github.com/ZeroPointSix/outlookEmailPlus/releases/tag/v1.16.0`
+   - 当前发布日志中的产物口径已与实际一致：Docker tar 与源码 zip 均为成功
+
+---
+
 #### 36. CI 修复结果复核（四项主工作流恢复全绿）
 
 **时间**：2026-04-13
