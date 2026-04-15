@@ -8,6 +8,30 @@
 
 ### 操作记录
 
+#### 64. main 分支文档提交后运行态复核（服务已退出）
+
+**时间**：2026-04-15
+
+**本次操作**：
+
+1. 本地提交完成
+   - 提交：`32632f9`
+   - 提交信息：`docs: record main-branch startup and full regression rerun`
+   - 包含文件：`WORKSPACE.md` + 5 份 Webhook/API Key 会话文档
+
+2. 分支状态
+   - 当前：`main...origin/main [ahead 2]`
+   - 说明：仅本地提交，未 push
+
+3. 运行态复核（提交后）
+   - 原运行 PID `41184` 已不存在
+   - 端口复核：`5000` 无监听（`NO_LISTENER_5000`）
+   - 健康检查：`GET /healthz` 连接失败
+
+4. 现场状态
+   - 当前本地服务处于未运行状态
+   - 本次仅记录复核结果，未再次启动服务
+
 #### 63. main 分支文档与 WORKSPACE 回填提交（本地未推送）
 
 **时间**：2026-04-15
