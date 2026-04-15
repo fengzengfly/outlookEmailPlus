@@ -3,9 +3,9 @@
 > 检查日期：2026-04-14  
 > 对照文档：
 > - PRD: `docs/PRD/2026-04-14-通用Webhook通知与APIKey易用性增强PRD.md`（v1.5，路径待补）
-> - FD: `docs/FD/2026-04-14-通用Webhook通知与APIKey易用性增强FD.md`（v1.10）
-> - TD: `docs/TD/2026-04-14-通用Webhook通知与APIKey易用性增强TD.md`（v1.10）
-> - TDD: `docs/TDD/2026-04-14-通用Webhook通知与APIKey易用性增强TDD.md`（v1.9）
+> - FD: `docs/FD/2026-04-14-通用Webhook通知与APIKey易用性增强FD.md`（v1.11）
+> - TD: `docs/TD/2026-04-14-通用Webhook通知与APIKey易用性增强TD.md`（v1.11）
+> - TDD: `docs/TDD/2026-04-14-通用Webhook通知与APIKey易用性增强TDD.md`（v1.10）
 
 ---
 
@@ -159,6 +159,13 @@
   - `Create GitHub Release`（run `24451870230`）已 success；
   - `Build and Push Docker Image`（run `24451870226`）进行中（queued/in_progress）。
 - 待该 workflow 完成后，再回填双仓 `v1.17.0` 镜像标签核对结论。
+
+### 4.13 v1.17.0 双仓标签镜像补齐完成（2026-04-15）
+
+- `Build and Push Docker Image`（run `24451870226`）已 success。
+- GHCR 与 DockerHub 的 `v1.17.0` 标签均已存在，digest 一致：
+  - `sha256:e485e28b6e5ca5fbb83a0a9f38dc173316bfd166cb874a07b0250471021bfdb4`
+- 结论：v1.17.0 发布、CI 修复、双仓镜像补齐均已完成闭环。
 
 ---
 

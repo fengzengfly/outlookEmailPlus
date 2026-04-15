@@ -1,8 +1,8 @@
 # TD: 通用 Webhook 通知与 API Key 易用性增强
 
-- 文档版本: v1.10
+- 文档版本: v1.11
 - 创建日期: 2026-04-14
-- 更新日期: 2026-04-15（v1.10 — 回填 v1.17.0 重打标签补镜像执行）
+- 更新日期: 2026-04-15（v1.11 — 回填 v1.17.0 标签镜像补齐完成）
 - 文档类型: 技术细节设计
 - 关联 PRD: `docs/PRD/2026-04-14-通用Webhook通知与APIKey易用性增强PRD.md`（路径待补）
 - 关联 FD: `docs/FD/2026-04-14-通用Webhook通知与APIKey易用性增强FD.md`
@@ -606,3 +606,12 @@ const key = Array.from(bytes, b => ALPHABET[b % ALPHABET.length]).join('');
 3. 触发结果：
    - `Create GitHub Release`（run `24451870230`）已 success；
    - `Build and Push Docker Image`（run `24451870226`）已触发，当前处于 queued/in_progress（待完成后复核双仓 `v1.17.0`）。
+
+### 10.10 v1.17.0 标签镜像补齐完成（2026-04-15）
+
+1. 工作流结果：
+   - `Build and Push Docker Image`（run `24451870226`）✅ success。
+2. 双仓复核：
+   - GHCR `v1.17.0` digest：`sha256:e485e28b6e5ca5fbb83a0a9f38dc173316bfd166cb874a07b0250471021bfdb4`
+   - DockerHub `v1.17.0` digest：`sha256:e485e28b6e5ca5fbb83a0a9f38dc173316bfd166cb874a07b0250471021bfdb4`
+   - 结论：双仓一致，版本标签镜像补齐成功。

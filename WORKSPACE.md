@@ -201,6 +201,31 @@
 5. 现场状态
    - 当前工作区干净，等待 Docker tag workflow 最终完成后再核对双仓 `v1.17.0` 标签。
 
+#### 74. v1.17.0 标签镜像补齐完成（双仓 digest 一致）
+
+**时间**：2026-04-15
+
+**本次操作**：
+
+1. 工作流完成确认
+   - `Build and Push Docker Image`（run `24451870226`）状态：`completed/success`。
+   - 关联 tag 目标提交：`f3d2208`。
+
+2. 双仓 `v1.17.0` 镜像复核
+   - GHCR：`ghcr.io/zeropointsix/outlook-email-plus:v1.17.0`
+   - DockerHub：`docker.io/guangshanshui/outlook-email-plus:v1.17.0`
+   - 两仓 index digest 一致：
+     - `sha256:e485e28b6e5ca5fbb83a0a9f38dc173316bfd166cb874a07b0250471021bfdb4`
+
+3. 其他监控补充
+   - `docs: record dual-registry image status for v1.17.0` 触发的 Sonar（run `24451739406`）已 success。
+
+4. 文档回填
+   - 已同步更新：FD/TD/TDD/TODO/联调检查文档，结论改为“v1.17.0 双仓标签镜像已补齐”。
+
+5. 现场状态
+   - 版本发布链路闭环：Release ✅、主链路 CI ✅、双仓 `v1.17.0` 标签镜像 ✅。
+
 #### 66. v1.17.0 发布执行（单提交策略）与 CI/CD 实时结果回填
 
 **时间**：2026-04-15

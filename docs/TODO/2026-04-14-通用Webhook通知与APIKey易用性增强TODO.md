@@ -1,11 +1,11 @@
 # TODO: 通用 Webhook 通知与 API Key 易用性增强
 
 > 创建日期：2026-04-14  
-> 更新日期：2026-04-15（v1.12 — 回填 v1.17.0 重打标签补镜像进展）  
+> 更新日期：2026-04-15（v1.13 — 回填 v1.17.0 标签镜像补齐完成）  
 > 基于 PRD v1.5：`docs/PRD/2026-04-14-通用Webhook通知与APIKey易用性增强PRD.md`（路径待补）  
-> 基于 FD v1.10：`docs/FD/2026-04-14-通用Webhook通知与APIKey易用性增强FD.md`  
-> 基于 TD v1.10：`docs/TD/2026-04-14-通用Webhook通知与APIKey易用性增强TD.md`  
-> 基于 TDD v1.9：`docs/TDD/2026-04-14-通用Webhook通知与APIKey易用性增强TDD.md`  
+> 基于 FD v1.11：`docs/FD/2026-04-14-通用Webhook通知与APIKey易用性增强FD.md`  
+> 基于 TD v1.11：`docs/TD/2026-04-14-通用Webhook通知与APIKey易用性增强TD.md`  
+> 基于 TDD v1.10：`docs/TDD/2026-04-14-通用Webhook通知与APIKey易用性增强TDD.md`  
 > 联调检查：`docs/TD/2026-04-14-通用Webhook通知与APIKey易用性增强-PRD-FD-TD-TDD联调检查.md`  
 > AI 执行提示词：按会话实时提供（不落库文档）  
 > 目标版本：v1.17.x（待排期）
@@ -148,6 +148,13 @@
   - `Create GitHub Release`（run `24451870230`）✅
   - `Build and Push Docker Image`（run `24451870226`）⏳（queued/in_progress）
 - 待办：Docker workflow 完成后复核 GHCR + DockerHub 的 `v1.17.0` 标签是否补齐。
+
+### 本次执行回填（2026-04-15，重打标签补镜像完成）
+
+- `Build and Push Docker Image`（run `24451870226`）已成功完成。
+- 双仓 `v1.17.0` 标签已补齐，digest 一致：
+  - `sha256:e485e28b6e5ca5fbb83a0a9f38dc173316bfd166cb874a07b0250471021bfdb4`
+- 结论：Release + 双仓镜像链路全部闭环。
 
 ---
 
