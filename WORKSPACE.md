@@ -8,6 +8,45 @@
 
 ### 操作记录
 
+#### 65. 发布续推前主工作树核对与会话文档实况修正
+
+**时间**：2026-04-15
+
+**本次操作**：
+
+1. 工作树与分支现场核对
+   - 用户确认后切换到发布主工作树：`E:/hushaokang/Data-code/outlookEmail`（`main`）。
+   - `git status --short --branch`：`main...origin/main [ahead 3]`。
+   - 未提交改动集中在 `v1.17.0` 版本口径文件：
+     - `CHANGELOG.md`
+     - `README.md`
+     - `README.en.md`
+     - `docs/DEVLOG.md`
+     - `outlook_web/__init__.py`
+     - `tests/test_version_update.py`
+
+2. 交叉工作树一致性核对
+   - `Buggithubissue` 工作树状态：`ahead 1` 且工作区干净。
+   - 结论：`Buggithubissue` 不含本轮 `v1.17.0` 未提交版本改动，发布应在 `main` 工作树继续。
+
+3. 运行态复核（发布前）
+   - 端口检查：`5000` 无监听（`NO_LISTENER_5000`）。
+   - 健康检查：`GET http://127.0.0.1:5000/healthz` 连接失败。
+   - 结论：当前本地服务未运行；本次仅记录现场，不新增启停动作。
+
+4. 会话文档按实际修正
+   - 已更新：
+     - `docs/FD/2026-04-14-通用Webhook通知与APIKey易用性增强FD.md`（v1.6）
+     - `docs/TD/2026-04-14-通用Webhook通知与APIKey易用性增强TD.md`（v1.6）
+     - `docs/TDD/2026-04-14-通用Webhook通知与APIKey易用性增强TDD.md`（v1.5）
+     - `docs/TODO/2026-04-14-通用Webhook通知与APIKey易用性增强TODO.md`（v1.8）
+     - `docs/TD/2026-04-14-通用Webhook通知与APIKey易用性增强-PRD-FD-TD-TDD联调检查.md`
+
+5. 现场状态
+   - 本次仅执行：状态核对 + 文档修正 + WORKSPACE 记录。
+   - 未新增业务代码实现改动。
+   - 未执行服务启动/重启/停止。
+
 #### 64. main 分支文档提交后运行态复核（服务已退出）
 
 **时间**：2026-04-15

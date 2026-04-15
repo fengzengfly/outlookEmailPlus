@@ -1,8 +1,8 @@
 # TD: 通用 Webhook 通知与 API Key 易用性增强
 
-- 文档版本: v1.5
+- 文档版本: v1.6
 - 创建日期: 2026-04-14
-- 更新日期: 2026-04-15（v1.5 — 回填 main 分支启动与分批全量回归）
+- 更新日期: 2026-04-15（v1.6 — 回填发布续推前主工作树与运行态核对）
 - 文档类型: 技术细节设计
 - 关联 PRD: `docs/PRD/2026-04-14-通用Webhook通知与APIKey易用性增强PRD.md`（路径待补）
 - 关联 FD: `docs/FD/2026-04-14-通用Webhook通知与APIKey易用性增强FD.md`
@@ -533,4 +533,20 @@ const key = Array.from(bytes, b => ALPHABET[b % ALPHABET.length]).join('');
    - `test_[g-l]*` → Ran 89, OK
    - `test_[m-r]*` → Ran 231, OK (skipped=7)
    - `test_[s-z]*` → Ran 492, OK
-   - 汇总：**1158 tests 通过，skipped=7**。
+    - 汇总：**1158 tests 通过，skipped=7**。
+
+### 10.5 发布续推前现场核对（2026-04-15）
+
+1. 工作树状态：
+   - 发布主工作树：`E:/hushaokang/Data-code/outlookEmail`；
+   - 分支：`main...origin/main [ahead 3]`；
+   - 未提交变更集中在 `v1.17.0` 版本口径文件（`CHANGELOG/README/DEVLOG/__init__/version tests`）。
+2. 交叉核对：
+   - `Buggithubissue` 工作树状态为 `ahead 1` 且工作区干净；
+   - 不包含上述 `v1.17.0` 未提交改动，确认发布应在 main 工作树继续。
+3. 运行态：
+   - `5000` 端口当前无监听；
+   - `GET http://127.0.0.1:5000/healthz` 连接失败；
+   - 结论：此前后台服务已退出，本轮先记录状态，不做额外启停动作。
+4. 发布流程约束：
+   - 按 `RELEASE.md` 执行 Python/Docker/GitHub Release 链路（提交→tag→push→Release/Actions 监控）。

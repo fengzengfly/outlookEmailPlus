@@ -1,5 +1,43 @@
 # DEVLOG
 
+## v1.17.0 - 通用 Webhook 通知与 API Key 易用性增强
+
+发布日期：2026-04-15
+
+### 新增功能
+
+- 新增通用 Webhook 通知通道，支持在现有通知分发中与 Email/Telegram 并存。
+- 新增 `POST /api/settings/webhook-test` 测试接口，严格采用“先保存配置，再测试发送”口径。
+- 设置页新增 External API Key “随机生成 + 复制”交互，随机值由前端 `crypto.getRandomValues` 生成 64 位 URL-safe 字符串。
+
+### 修复
+
+- 完善 Webhook 配置/测试路径错误码与可读错误输出，配置缺失时稳定返回 `WEBHOOK_NOT_CONFIGURED`。
+- 修复并收敛 Webhook 接入后的通道协同行为，保持既有 Email/Telegram 行为与去重语义不回退。
+- 补齐前端契约与 i18n 词条，避免设置页交互和提示文案的回归漂移。
+
+### 重要变更
+
+- 版本号从 `1.16.0` 升级至 `1.17.0`。
+- 版本口径同步更新：`README.md`、`README.en.md`、`tests/test_version_update.py`。
+- 本次改动未引入新第三方依赖，未进行数据库 schema 升级。
+
+### 测试/验证
+
+- 定向测试（Webhook/API Key）：
+  - `python -m unittest tests.test_settings_webhook -v` → `Ran 9, OK`
+  - `python -m unittest tests.test_webhook_push -v` → `Ran 7, OK`
+  - `python -m unittest tests.test_notification_dispatch -v` → `Ran 25, OK`
+  - `python -m unittest tests.test_settings_webhook_frontend_contract -v` → `Ran 4, OK`
+  - `python -m unittest tests.test_v190_frontend_contract -v` → `Ran 18, OK`
+- 分批全量回归（main）：
+  - `test_[a-f]*` → `Ran 346, OK`
+  - `test_[g-l]*` → `Ran 89, OK`
+  - `test_[m-r]*` → `Ran 231, OK (skipped=7)`
+  - `test_[s-z]*` → `Ran 492, OK`
+  - 汇总：`1158 tests 通过，skipped=7`
+- 构建与发布：见本次 Release 执行记录（WORKSPACE 与 GitHub Release 页面）。
+
 ## v1.16.0 - OAuth Token 授权链接模式与 flow 修复
 
 发布日期：2026-04-13

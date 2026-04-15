@@ -1,8 +1,8 @@
 # TDD: 通用 Webhook 通知与 API Key 易用性增强
 
-- 文档版本: v1.4
+- 文档版本: v1.5
 - 创建日期: 2026-04-14
-- 更新日期: 2026-04-15（v1.4 — 回填 main 分支全量回归复核）
+- 更新日期: 2026-04-15（v1.5 — 回填发布续推前运行态与工作树核对）
 - 文档类型: 测试设计文档（TDD）
 - 关联 PRD: `docs/PRD/2026-04-14-通用Webhook通知与APIKey易用性增强PRD.md`（路径待补）
 - 关联 FD: `docs/FD/2026-04-14-通用Webhook通知与APIKey易用性增强FD.md`
@@ -349,3 +349,10 @@ python -m unittest discover -s tests -v
   - `python -m unittest discover -s tests -v -p "test_[m-r]*.py"` → **Ran 231, OK (skipped=7)**
   - `python -m unittest discover -s tests -v -p "test_[s-z]*.py"` → **Ran 492, OK**
 - 汇总：**1158 tests 通过，skipped=7**（与前序两轮结果一致）。
+
+### 13.9 发布续推前现场核对（2026-04-15）
+
+- 工作树确认：发布工作树为 `main`（`E:/hushaokang/Data-code/outlookEmail`），状态 `ahead 3` 且存在 `v1.17.0` 版本口径未提交改动。
+- 交叉对照：`Buggithubissue` 工作树仅 `ahead 1` 且干净，不含本轮版本改动。
+- 运行态确认：`5000` 端口无监听，`/healthz` 连接失败，说明当前无本地服务驻留进程。
+- 结论：测试结论不变（自动化回归仍以 1158/7 为准），发布续推需在 main 工作树继续执行版本提交与发布链路。

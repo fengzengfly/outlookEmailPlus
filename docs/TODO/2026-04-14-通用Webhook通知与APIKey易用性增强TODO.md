@@ -1,11 +1,11 @@
 # TODO: 通用 Webhook 通知与 API Key 易用性增强
 
 > 创建日期：2026-04-14  
-> 更新日期：2026-04-15（v1.7 — 回填 main 分支启动与全量回归复核）  
+> 更新日期：2026-04-15（v1.8 — 回填发布续推前主工作树与现场状态核对）  
 > 基于 PRD v1.5：`docs/PRD/2026-04-14-通用Webhook通知与APIKey易用性增强PRD.md`（路径待补）  
-> 基于 FD v1.5：`docs/FD/2026-04-14-通用Webhook通知与APIKey易用性增强FD.md`  
-> 基于 TD v1.5：`docs/TD/2026-04-14-通用Webhook通知与APIKey易用性增强TD.md`  
-> 基于 TDD v1.4：`docs/TDD/2026-04-14-通用Webhook通知与APIKey易用性增强TDD.md`  
+> 基于 FD v1.6：`docs/FD/2026-04-14-通用Webhook通知与APIKey易用性增强FD.md`  
+> 基于 TD v1.6：`docs/TD/2026-04-14-通用Webhook通知与APIKey易用性增强TD.md`  
+> 基于 TDD v1.5：`docs/TDD/2026-04-14-通用Webhook通知与APIKey易用性增强TDD.md`  
 > 联调检查：`docs/TD/2026-04-14-通用Webhook通知与APIKey易用性增强-PRD-FD-TD-TDD联调检查.md`  
 > AI 执行提示词：按会话实时提供（不落库文档）  
 > 目标版本：v1.17.x（待排期）
@@ -88,6 +88,19 @@
   - `test_[m-r]*` → **Ran 231, OK (skipped=7)**
   - `test_[s-z]*` → **Ran 492, OK**
 - 汇总：**1158 tests 通过，skipped=7**。
+
+### 本次执行回填（2026-04-15，发布续推前核对）
+
+- 主发布工作树：`E:/hushaokang/Data-code/outlookEmail`，分支状态 `main...origin/main [ahead 3]`。
+- 当前未提交改动为 `v1.17.0` 版本口径文件：
+  - `CHANGELOG.md`
+  - `README.md`
+  - `README.en.md`
+  - `docs/DEVLOG.md`
+  - `outlook_web/__init__.py`
+  - `tests/test_version_update.py`
+- 对照工作树：`Buggithubissue` 当前 `ahead 1` 且干净，不含本轮未提交版本改动。
+- 运行态复核：5000 端口无监听，`/healthz` 连接失败（当前本地服务未运行）。
 
 ---
 

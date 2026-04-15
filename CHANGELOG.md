@@ -4,14 +4,24 @@ All notable changes to OutlookMail Plus are documented in this file.
 
 ## [Unreleased]
 
+## [v1.17.0] - 2026-04-15
+
 ### 新功能 / New Features
 
 - **通用 Webhook 通知通道**：在现有通知分发体系中新增 `webhook` 通道，支持全局单 URL 配置，与 Email/Telegram 并存；发送协议为 `POST text/plain; charset=utf-8`。
 - **Webhook 测试链路**：新增 `/api/settings/webhook-test`，按“先保存，再测试”口径，仅使用已保存配置进行测试发送。
 - **External API Key 易用性增强**：设置页新增“随机生成 + 复制”交互，随机值为前端 `crypto.getRandomValues` 生成的 64 位 URL-safe 字符串。
 
+### 修复 / Bug Fixes
+
+- **设置链路校验修复**：补齐 Webhook 配置保存与测试路径中的错误码映射与可读错误返回，配置缺失时稳定返回 `WEBHOOK_NOT_CONFIGURED`。
+- **通知分发兼容修复**：Webhook 接入后继续保持 Email/Telegram 既有行为与游标/去重语义，不引入跨通道互斥副作用。
+- **前端契约修复**：补齐自动化 Tab 与 API 安全 Tab 的文案和交互契约（Webhook 字段、测试按钮、API Key 生成与复制函数）以消除回归风险。
+
 ### 重要变更 / Important Changes
 
+- **版本升级**：`outlook_web.__version__` 从 `1.16.0` 升级为 `1.17.0`。
+- **版本口径同步**：`README.md`、`README.en.md`、`tests/test_version_update.py` 同步更新到 `v1.17.0`。
 - Webhook Token 作为可选头处理：仅在 token 非空时发送 `X-Webhook-Token`。
 - Webhook 投递策略固定：10 秒超时、失败立即重试 1 次、2xx 视为成功。
 - 本次能力扩展未引入新第三方依赖，未进行数据库 schema 变更。
@@ -32,6 +42,11 @@ All notable changes to OutlookMail Plus are documented in this file.
   - `test_[m-r]*` → Ran 231, OK (skipped=7)
   - `test_[s-z]*` → Ran 492, OK
   - 汇总：**1158 tests 通过，skipped=7**。
+- main 分支复核：
+  - 在 main 再次执行分批全量回归，结果与上次一致（**1158 通过，skipped=7**）。
+- 构建验证：
+  - `docker build -t outlook-email-plus:v1.17.0 .`（本次发布执行）
+  - 产物预期：Docker 镜像 tar + 源码 zip
 
 ### 已知风险 / Known Risks
 
