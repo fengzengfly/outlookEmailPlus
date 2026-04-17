@@ -8,9 +8,102 @@
 
 ### 操作记录
 
-<<<<<<< HEAD
-#### 128. 其它本地分支及对应远端已直接对齐到 main 目标提交 772d540
-=======
+#### 154. 人工验收结论回填：本轮本地 Docker 验收通过
+
+**时间**：2026-04-17
+
+**本次操作**：
+
+1. 验收结果确认
+   - 用户已确认：`验收通过了`
+   - 验收环境：`http://127.0.0.1:5002`
+   - 对应容器：`outlook-email-plus-local-main`（重建后实例）
+
+2. 状态收口
+   - 本轮“main 合并后分批回归 + 本地 Docker 重构建 + 人工验收”闭环完成。
+   - 当前不新增代码实现变更，仅做会话文档状态更新。
+
+3. 文档同步
+   - 本条已回填 `WORKSPACE.md`
+   - BUG 文档同步追加“人工验收通过”结论
+
+#### 153. 本地 Docker 重构建并复用 5002 启动人工验收容器（按用户选择方案B）
+
+**时间**：2026-04-17
+
+**本次操作**：
+
+1. 现场确认
+   - Docker 可用：`Docker version 28.3.2`
+   - 原容器：`outlook-email-plus-local-main`（`5002->5000`）处于 `healthy`
+
+2. 按用户选择执行方案B（复用 5002）
+   - 停止并删除旧容器：
+     - `docker stop outlook-email-plus-local-main`
+     - `docker rm outlook-email-plus-local-main`
+
+3. 本地构建新镜像
+   - 命令：`docker build -t ghcr.io/zeropointsix/outlook-email-plus:local-main-20260417 .`
+   - 结果：`DONE`，镜像 ID `sha256:22c3e01515a19002d6c397872fb91b914f406d257dea4d67affea9ed887d8e52`
+
+4. 复用 5002 启动新容器（隔离数据目录）
+   - 运行目录：
+     - `.runtime/docker-data-main-20260417 -> /app/data`
+     - `.runtime/docker-run-main-20260417 -> /app/.runtime`
+   - 启动命令：`docker run -d --name outlook-email-plus-local-main -p 5002:5000 ...`
+   - 新容器 ID：`ef9da16ca02e19b88307027682762d102024dc14ca41dd6da4e1b6d7caca4360`
+
+5. 启动后核验
+   - `docker ps`：`outlook-email-plus-local-main   Up ... (healthy)   0.0.0.0:5002->5000`
+   - 健康检查：`GET http://127.0.0.1:5002/healthz` 返回
+     - `{"boot_id":"1776406310777-7","status":"ok","version":"1.18.0"}`
+
+6. 当前可用状态
+   - 人工验收地址：`http://127.0.0.1:5002`
+
+#### 151. main 合并后全量回归复核：单次全量执行超时，改为分批方案继续
+
+**时间**：2026-04-17
+
+**本次操作**：
+
+1. 分支现场复核
+   - `Buggithubissue`：`## Buggithubissue...origin/Buggithubissue`（已对齐、工作树干净）
+   - `main`：`## main...origin/main [ahead 4]`
+
+2. 在本地 `main` 执行全量 unittest
+   - 命令：`python -m unittest discover -v`
+   - 超时：`300000ms`
+   - 实际结果：命令在超时上限前未完成，日志未出现最终 `Ran X tests` / `OK` / `FAILED` 汇总行
+   - 输出文件：`C:\Users\PLA30\.local\share\opencode\tool-output\tool_d99c3135e001g8oijcrhMfXi5k`
+
+3. 当前结论与后续
+   - 当前无法给出“合并后全量通过/失败”的最终结论（因超时中断）
+   - 用户已选择下一步方案：按分批方式继续跑完并汇总
+
+#### 152. main 合并后分批全量回归完成：4 分片全部通过
+
+**时间**：2026-04-17
+
+**本次操作**：
+
+1. 按分批方案执行 unittest（每批 timeout=300000ms）
+   - 分片1：`Ran 303 tests in 189.896s`，`OK`
+   - 分片2：`Ran 266 tests in 47.230s`，`OK`
+   - 分片3：`Ran 273 tests in 43.359s`，`OK (skipped=7)`
+   - 分片4：`Ran 352 tests in 82.976s`，`OK`
+
+2. 汇总结论
+   - 四个分片均通过，未出现 FAIL/ERROR。
+   - 在当前单命令 300000ms 约束下，分批方式已完成 `main` 合并后的全量回归闭环。
+
+3. 当前分支状态
+   - `main...origin/main [ahead 4]`（本地领先远端 4 个提交，尚未 push）
+
+4. 文档同步
+   - 本条已回填 `WORKSPACE.md`
+   - BUG 文档同步追加“main 合并后分批全量回归通过”状态
+
 #### 150. 按用户要求仅执行推送：本地分支已同步到远端
 
 **时间**：2026-04-17
@@ -653,37 +746,11 @@
    - A（OAuth 隔离）与 B（Issue #45）均已在代码层完成落地并通过定向回归。
 
 #### 130. 继续推进（按用户选择先做A）：复核当前真实状态并先修复 OAuth Tool 测试隔离污染
->>>>>>> Buggithubissue
 
 **时间**：2026-04-16
 
 **本次操作**：
 
-<<<<<<< HEAD
-1. 目标确认
-   - 按用户确认方案，采用“**直接移动分支指针**”而非 merge / cherry-pick
-   - 覆盖范围：除 `main` 外的全部本地分支
-   - 实际目标提交：`772d540` `docs(workspace): record docs push`
-
-2. 本地分支对齐
-   - 已对齐本地分支：
-     - `Buggithubissue`
-     - `dev`
-     - `feature`
-   - 处理方式：分别在对应 worktree 执行 `git reset --hard 772d540`
-
-3. 远端分支对齐
-   - 已执行：`git push --force-with-lease origin Buggithubissue dev feature`
-   - 对应远端分支已同步到相同提交：`772d540`
-
-4. 现场说明
-   - `Buggithubissue` worktree 中存在未跟踪文件：`test_output.txt`
-   - 本次仅移动分支提交指针，未删除该未跟踪文件
-
-5. 当前状态
-   - 当前 `Buggithubissue` / `dev` / `feature` 的本地分支与远端分支，均已对齐到用户指定目标提交 `772d540`
-   - 为保持“其它分支对齐到 `772d540`”这一结果，本条 `WORKSPACE.md` 记录暂未单独提交到 `main`
-=======
 1. 基线复核（先读 WORKSPACE + 关键代码）
    - 按用户要求先复读 `WORKSPACE.md`，并复查：
      - `outlook_web/services/refresh.py`
@@ -743,7 +810,7 @@
 3. 分片执行（4 分片）
    - 分片 1：`Ran 328 tests`，`FAILED (failures=1, skipped=6)`
      - 失败用例：`tests.test_oauth_tool.OAuthToolApiAccountListTests.test_accounts_list_empty`
-     - 该失败为“列表应为空”断言，与本次 selected 刷新改动链路无直接耦合
+     - 该失败为”列表应为空”断言，与本次 selected 刷新改动链路无直接耦合
    - 分片 2：`Ran 231 tests`，`OK (skipped=1)`
    - 分片 3：`Ran 350 tests`，`OK`
    - 分片 4：`Ran 279 tests`，`OK`
@@ -769,14 +836,14 @@
    - 定位到 `outlook_web/services/refresh.py` 的 selected 刷新链路在账号过滤阶段异常
 
 2. 根因
-   - selected 刷新过滤使用了 `row.get("provider")`
+   - selected 刷新过滤使用了 `row.get(“provider”)`
    - 该分支 `row` 为 `sqlite3.Row`（`row_factory=sqlite3.Row`），不支持 `.get()`
    - 导致 SSE 任务提前失败并回 `type=error`，前端侧仅见通用失败提示
 
 3. 代码修复
    - 更新：`outlook_web/services/refresh.py`
    - selected 查询补齐 `provider` 列
-   - `row.get("provider")` 改为 `row["provider"]`
+   - `row.get(“provider”)` 改为 `row[“provider”]`
 
 4. 回归测试
    - 更新：`tests/test_refresh_outlook_only.py`
@@ -787,7 +854,36 @@
 5. 会话文档同步
    - 新增 BUG 文档：`docs/BUG/2026-04-16-批量刷新Selected账号-SSE提前失败BUG.md`
    - 已记录问题现象、证据链、根因、影响范围与修复建议
->>>>>>> Buggithubissue
+
+#### 128b. 其它本地分支及对应远端已直接对齐到 main 目标提交 772d540
+
+**时间**：2026-04-16
+
+**本次操作**：
+
+1. 目标确认
+   - 按用户确认方案，采用”**直接移动分支指针**”而非 merge / cherry-pick
+   - 覆盖范围：除 `main` 外的全部本地分支
+   - 实际目标提交：`772d540` `docs(workspace): record docs push`
+
+2. 本地分支对齐
+   - 已对齐本地分支：
+     - `Buggithubissue`
+     - `dev`
+     - `feature`
+   - 处理方式：分别在对应 worktree 执行 `git reset --hard 772d540`
+
+3. 远端分支对齐
+   - 已执行：`git push --force-with-lease origin Buggithubissue dev feature`
+   - 对应远端分支已同步到相同提交：`772d540`
+
+4. 现场说明
+   - `Buggithubissue` worktree 中存在未跟踪文件：`test_output.txt`
+   - 本次仅移动分支提交指针，未删除该未跟踪文件
+
+5. 当前状态
+   - 当前 `Buggithubissue` / `dev` / `feature` 的本地分支与远端分支，均已对齐到用户指定目标提交 `772d540`
+   - 为保持”其它分支对齐到 `772d540`”这一结果，本条 `WORKSPACE.md` 记录暂未单独提交到 `main`
 
 #### 127. 文档同步提交已推送到 origin/main
 

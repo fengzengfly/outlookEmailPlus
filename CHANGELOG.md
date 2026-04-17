@@ -4,6 +4,41 @@ All notable changes to OutlookMail Plus are documented in this file.
 
 ## [Unreleased]
 
+## [v1.19.0] - 2026-04-17
+
+### 新增功能 / New Features
+
+- **刷新失败提示模板化增强**：前端新增 selected/refresh-all 的失败摘要构造函数，统一输出错误码、可执行步骤与 trace 反馈指引，减少“仅显示刷新失败”不可操作提示。
+- **Selected 刷新回归补强**：新增 `tests/test_refresh_selected_issue45.py`，覆盖 Outlook+IMAP 混选下仅刷新 Outlook、跳过 IMAP 且 SSE `start/progress/complete` 完整返回。
+
+### 修复 / Bug Fixes
+
+- **Issue #45 根因修复**：`stream_refresh_selected_accounts` 中 selected 查询补齐 `provider` 字段，`sqlite3.Row` 访问从 `row.get(...)` 改为 `row[...]`，修复 selected SSE 过滤阶段提前异常。
+- **冲突提示语义统一**：scheduled / selected / retry_failed 三条刷新入口统一 `REFRESH_CONFLICT` 语义，明确“当前已有刷新任务执行中，请等待完成后再试”。
+- **权限失败可执行提示**：`NO_MAIL_PERMISSION` 场景下前端改为给出重新授权与补齐 `Mail.Read / Mail.ReadWrite` 的明确操作建议。
+- **OAuth Tool 空列表隔离修复**：`tests/test_oauth_tool.py` 的测试初始化补充清理关联表，消除共享测试库残留导致的 `test_accounts_list_empty` 间歇性失败。
+
+### 重要变更 / Important Changes
+
+- **版本升级**：`outlook_web.__version__` 从 `1.18.0` 升级为 `1.19.0`。
+- **版本口径同步**：`README.md`、`README.en.md`、`tests/test_version_update.py`、`docs/DEVLOG.md` 同步更新到 `v1.19.0`。
+- **发布口径说明**：当前仓库继续采用 Python + Docker 发布链路，不含 Tauri/Cargo/NPM/MSI/NSIS 构建链路；本次发布产物继续使用 Docker 镜像 tar 与源码 zip。
+
+### 测试/验证 / Testing & Verification
+
+- main 合并后分批全量回归（单命令 300000ms 约束下）：
+  - Batch1：`Ran 303 tests in 189.896s`，`OK`
+  - Batch2：`Ran 266 tests in 47.230s`，`OK`
+  - Batch3：`Ran 273 tests in 43.359s`，`OK (skipped=7)`
+  - Batch4：`Ran 352 tests in 82.976s`，`OK`
+- 定向回归：
+  - `tests.test_refresh_selected_issue45` / `tests.test_refresh_outlook_only` / `tests.test_frontend_account_type_and_refresh_suggestions_contract` / `tests.test_oauth_tool` 均通过。
+- 本地 Docker 人工验收：
+  - 构建镜像 `ghcr.io/zeropointsix/outlook-email-plus:local-main-20260417` 成功；
+  - 容器 `outlook-email-plus-local-main` 在 `5002->5000` healthy；
+  - `GET /healthz` 返回 `status=ok, version=1.18.0`（构建时点）；
+  - 用户确认“验收通过”。
+
 ## [v1.18.0] - 2026-04-16
 
 ### 新增功能 / New Features

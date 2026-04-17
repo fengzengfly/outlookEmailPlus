@@ -346,6 +346,40 @@ accounts = [
      - 或提供当前口令后继续脚本化验证。
 
 22. 分支同步状态（2026-04-17，本会话继续）
-   - 已按用户要求执行推送：`git push origin Buggithubissue`
-   - 远端更新：`772d540..402c04a`（`Buggithubissue -> Buggithubissue`）
-   - 当前本地与远端分支已对齐。
+    - 已按用户要求执行推送：`git push origin Buggithubissue`
+    - 远端更新：`772d540..402c04a`（`Buggithubissue -> Buggithubissue`）
+    - 当前本地与远端分支已对齐。
+
+23. 本地 `main` 合并后回归状态补充（2026-04-17，本会话继续）
+    - 当前 `main` 最近提交确认：
+      - `3c08745 merge: integrate Buggithubissue into main`
+    - 已在 `main` 执行全量命令：
+      - `python -m unittest discover -v`（timeout=300000ms）
+    - 结果：本轮因超时中断，未输出最终 unittest 汇总行（无 `Ran X tests ...` / `OK` / `FAILED`）。
+    - 说明：目前不能据此宣称“main 合并后全量已通过”；会按分批方案继续完成回归闭环。
+
+24. 本地 `main` 分批全量回归结果（2026-04-17，本会话继续）
+    - 按 4 分片执行（每批 timeout=300000ms）后结果：
+      - 分片1：`Ran 303 tests in 189.896s`，`OK`
+      - 分片2：`Ran 266 tests in 47.230s`，`OK`
+      - 分片3：`Ran 273 tests in 43.359s`，`OK (skipped=7)`
+      - 分片4：`Ran 352 tests in 82.976s`，`OK`
+    - 结论：
+      - `main` 合并后的全量回归已在分批模式下完成，未发现 FAIL/ERROR。
+
+25. 人工验收容器重建状态（2026-04-17，本会话继续）
+    - 按用户要求执行“本地构建 + 启动 + 人工验收”，并选择复用 `5002` 端口。
+    - 已执行：
+      - 停止并删除旧容器 `outlook-email-plus-local-main`
+      - 本地重构建镜像：`ghcr.io/zeropointsix/outlook-email-plus:local-main-20260417`
+      - 使用隔离数据目录重新启动同名容器并映射 `5002->5000`
+    - 启动后核验：
+      - 容器状态：`Up ... (healthy)`
+      - 健康检查：`GET http://127.0.0.1:5002/healthz` 返回
+        - `{"boot_id":"1776406310777-7","status":"ok","version":"1.18.0"}`
+    - 当前人工验收地址：`http://127.0.0.1:5002`
+
+26. 人工验收结果（2026-04-17，本会话继续）
+    - 用户已确认：`验收通过了`
+    - 结论：
+      - `main` 合并后的分批全量回归结果与本地 Docker 人工点测结果一致，当前未观察到与本 BUG 相关的新增回归问题。
