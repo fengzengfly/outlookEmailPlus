@@ -383,3 +383,17 @@ accounts = [
     - 用户已确认：`验收通过了`
     - 结论：
       - `main` 合并后的分批全量回归结果与本地 Docker 人工点测结果一致，当前未观察到与本 BUG 相关的新增回归问题。
+
+27. 发布后 CI 门禁补充（2026-04-17，本会话继续）
+    - 在 `v1.19.0` 发布后巡检发现：远端 `Code Quality / Build and Push Docker Image` 在 formatter gate 失败。
+    - 失败根因：`Run Black (Code Formatter Check)`。
+    - 已按远端日志对以下文件执行 Black 格式化并本地复核通过：
+      - `outlook_web/services/refresh.py`
+      - `tests/test_refresh_outlook_only.py`
+      - `tests/test_refresh_selected_issue45.py`
+      - `tests/test_frontend_account_type_and_refresh_suggestions_contract.py`
+    - 本地复核结果：
+      - `black --check` 通过
+      - `isort --check-only` 通过
+      - 相关定向 unittest：`Ran 20 tests ... OK`
+    - 随后已推送触发新一轮 CI，当前以该轮远端结果为准。
