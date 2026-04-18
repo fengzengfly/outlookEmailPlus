@@ -115,11 +115,12 @@ def stream_refresh_all_accounts(
             finish_refresh_run(conn, run_id, "skipped", total, 0, 0, "刷新任务冲突：已有刷新在执行")
             error_payload = build_error_payload(
                 code="REFRESH_CONFLICT",
-                message="当前已有刷新任务执行中，请稍后再试",
+                message="当前已有刷新任务执行中，请等待当前任务完成后再重试",
                 err_type="ConflictError",
                 status=409,
                 details=lock_info or "",
                 trace_id=trace_id,
+                message_en="Another refresh task is already running. Wait for it to finish and retry.",
             )
             yield f"data: {json.dumps({'type': 'error', 'error': error_payload}, ensure_ascii=False)}\n\n"
             return
@@ -285,12 +286,16 @@ def stream_refresh_all_accounts(
         except Exception:
             pass
         error_payload = build_error_payload(
-            code="REFRESH_FAILED",
-            message="刷新执行失败",
+            code="REFRESH_SELECTED_STREAM_FAILED",
+            message="批量刷新执行失败，请查看错误详情并按步骤重试",
             err_type="RefreshError",
             status=500,
-            details=str(e),
+            details={
+                "cause": str(e),
+                "hint": "检查所选账号状态与网络/代理设置后重试；若重复失败请使用 Trace ID 排查后端日志",
+            },
             trace_id=trace_id,
+            message_en="Selected account refresh failed. Check error details and retry with the suggested steps.",
         )
         yield f"data: {json.dumps({'type': 'error', 'error': error_payload}, ensure_ascii=False)}\n\n"
     finally:
@@ -394,11 +399,12 @@ def stream_trigger_scheduled_refresh(
             finish_refresh_run(conn, run_id, "skipped", total, 0, 0, "刷新任务冲突：已有刷新在执行")
             error_payload = build_error_payload(
                 code="REFRESH_CONFLICT",
-                message="当前已有刷新任务执行中，请稍后再试",
+                message="当前已有刷新任务执行中，请等待当前任务完成后再重试",
                 err_type="ConflictError",
                 status=409,
                 details=lock_info or "",
                 trace_id=trace_id,
+                message_en="Another refresh task is already running. Wait for it to finish and retry.",
             )
             yield f"data: {json.dumps({'type': 'error', 'error': error_payload}, ensure_ascii=False)}\n\n"
             return
@@ -610,7 +616,7 @@ def stream_refresh_selected_accounts(
         placeholders = ",".join("?" * len(account_ids))
         all_rows = conn.execute(
             f"""
-            SELECT id, email, client_id, refresh_token, group_id, account_type
+            SELECT id, email, client_id, refresh_token, group_id, account_type, provider
             FROM accounts
             WHERE id IN ({placeholders})
               AND status = 'active'
@@ -618,9 +624,7 @@ def stream_refresh_selected_accounts(
             account_ids,
         ).fetchall()
 
-        accounts = [
-            row for row in all_rows if is_refreshable_outlook_account(row["account_type"], provider=row.get("provider"))
-        ]
+        accounts = [row for row in all_rows if is_refreshable_outlook_account(row["account_type"], provider=row["provider"])]
         skipped_count = len(all_rows) - len(accounts)
         total = len(accounts)
 
@@ -639,11 +643,12 @@ def stream_refresh_selected_accounts(
             finish_refresh_run(conn, run_id, "skipped", total, 0, 0, "刷新任务冲突：已有刷新在执行")
             error_payload = build_error_payload(
                 code="REFRESH_CONFLICT",
-                message="当前已有刷新任务执行中，请稍后再试",
+                message="当前已有刷新任务执行中，请等待当前任务完成后再重试",
                 err_type="ConflictError",
                 status=409,
                 details=lock_info or "",
                 trace_id=trace_id,
+                message_en="Another refresh task is already running. Wait for it to finish and retry.",
             )
             yield f"data: {json.dumps({'type': 'error', 'error': error_payload}, ensure_ascii=False)}\n\n"
             return
@@ -922,11 +927,12 @@ def refresh_failed_accounts(
         finish_refresh_run(db, run_id, "skipped", total, 0, 0, "刷新任务冲突：已有刷新在执行")
         error_payload = build_error_payload(
             code="REFRESH_CONFLICT",
-            message="当前已有刷新任务执行中，请稍后再试",
+            message="当前已有刷新任务执行中，请等待当前任务完成后再重试",
             err_type="ConflictError",
             status=409,
             details=lock_info or "",
             trace_id=trace_id,
+            message_en="Another refresh task is already running. Wait for it to finish and retry.",
         )
         return {"success": False, "error": error_payload}, 409
 

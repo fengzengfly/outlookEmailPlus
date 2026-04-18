@@ -250,9 +250,19 @@ class RefreshOutlookOnlyTests(unittest.TestCase):
             return True, None, f"rt_rotated_{unique}"
 
         with (
-            patch.object(self.graph_service, "test_refresh_token_with_rotation", side_effect=fake_refresh),
-            patch("outlook_web.services.refresh.acquire_distributed_lock", return_value=(True, {})),
-            patch("outlook_web.services.refresh.release_distributed_lock", return_value=None),
+            patch.object(
+                self.graph_service,
+                "test_refresh_token_with_rotation",
+                side_effect=fake_refresh,
+            ),
+            patch(
+                "outlook_web.services.refresh.acquire_distributed_lock",
+                return_value=(True, {}),
+            ),
+            patch(
+                "outlook_web.services.refresh.release_distributed_lock",
+                return_value=None,
+            ),
             patch("outlook_web.services.refresh.time.sleep", return_value=None),
         ):
             resp = client.get("/api/accounts/refresh-all")
@@ -267,12 +277,21 @@ class RefreshOutlookOnlyTests(unittest.TestCase):
 
         outlook_row = self._get_account_row(outlook_id)
         imap_row = self._get_account_row(imap_id)
-        self.assertEqual(self.module.decrypt_data(outlook_row["refresh_token"]), f"rt_rotated_{unique}")
+        self.assertEqual(
+            self.module.decrypt_data(outlook_row["refresh_token"]),
+            f"rt_rotated_{unique}",
+        )
         self.assertEqual(self.module.decrypt_data(imap_row["refresh_token"]), f"imap_rt_{unique}")
         self.assertIsNone(imap_row["last_refresh_at"])
 
-        self.assertEqual(len(self._get_refresh_logs(account_id=outlook_id, refresh_type="manual_all")), 1)
-        self.assertEqual(len(self._get_refresh_logs(account_id=imap_id, refresh_type="manual_all")), 0)
+        self.assertEqual(
+            len(self._get_refresh_logs(account_id=outlook_id, refresh_type="manual_all")),
+            1,
+        )
+        self.assertEqual(
+            len(self._get_refresh_logs(account_id=imap_id, refresh_type="manual_all")),
+            0,
+        )
 
     def test_refresh_all_includes_legacy_null_account_type(self):
         client = self.app.test_client()
@@ -291,9 +310,19 @@ class RefreshOutlookOnlyTests(unittest.TestCase):
             return True, None, f"legacy_rotated_{unique}"
 
         with (
-            patch.object(self.graph_service, "test_refresh_token_with_rotation", side_effect=fake_refresh),
-            patch("outlook_web.services.refresh.acquire_distributed_lock", return_value=(True, {})),
-            patch("outlook_web.services.refresh.release_distributed_lock", return_value=None),
+            patch.object(
+                self.graph_service,
+                "test_refresh_token_with_rotation",
+                side_effect=fake_refresh,
+            ),
+            patch(
+                "outlook_web.services.refresh.acquire_distributed_lock",
+                return_value=(True, {}),
+            ),
+            patch(
+                "outlook_web.services.refresh.release_distributed_lock",
+                return_value=None,
+            ),
             patch("outlook_web.services.refresh.time.sleep", return_value=None),
         ):
             resp = client.get("/api/accounts/refresh-all")
@@ -309,7 +338,10 @@ class RefreshOutlookOnlyTests(unittest.TestCase):
         row = self._get_account_row(legacy_id)
         self.assertEqual(self.module.decrypt_data(row["refresh_token"]), f"legacy_rotated_{unique}")
         self.assertTrue(row["last_refresh_at"])
-        self.assertEqual(len(self._get_refresh_logs(account_id=legacy_id, refresh_type="manual_all")), 1)
+        self.assertEqual(
+            len(self._get_refresh_logs(account_id=legacy_id, refresh_type="manual_all")),
+            1,
+        )
 
     def test_manual_trigger_scheduled_refresh_only_processes_outlook_accounts(self):
         client = self.app.test_client()
@@ -326,9 +358,19 @@ class RefreshOutlookOnlyTests(unittest.TestCase):
             return True, None, f"rt_scheduled_{unique}"
 
         with (
-            patch.object(self.graph_service, "test_refresh_token_with_rotation", side_effect=fake_refresh),
-            patch("outlook_web.services.refresh.acquire_distributed_lock", return_value=(True, {})),
-            patch("outlook_web.services.refresh.release_distributed_lock", return_value=None),
+            patch.object(
+                self.graph_service,
+                "test_refresh_token_with_rotation",
+                side_effect=fake_refresh,
+            ),
+            patch(
+                "outlook_web.services.refresh.acquire_distributed_lock",
+                return_value=(True, {}),
+            ),
+            patch(
+                "outlook_web.services.refresh.release_distributed_lock",
+                return_value=None,
+            ),
             patch("outlook_web.services.refresh.time.sleep", return_value=None),
         ):
             resp = client.get("/api/accounts/trigger-scheduled-refresh?force=true")
@@ -343,11 +385,17 @@ class RefreshOutlookOnlyTests(unittest.TestCase):
 
         outlook_row = self._get_account_row(outlook_id)
         imap_row = self._get_account_row(imap_id)
-        self.assertEqual(self.module.decrypt_data(outlook_row["refresh_token"]), f"rt_scheduled_{unique}")
+        self.assertEqual(
+            self.module.decrypt_data(outlook_row["refresh_token"]),
+            f"rt_scheduled_{unique}",
+        )
         self.assertEqual(self.module.decrypt_data(imap_row["refresh_token"]), f"imap_rt_{unique}")
         self.assertIsNone(imap_row["last_refresh_at"])
 
-        self.assertEqual(len(self._get_refresh_logs(account_id=outlook_id, refresh_type="scheduled")), 1)
+        self.assertEqual(
+            len(self._get_refresh_logs(account_id=outlook_id, refresh_type="scheduled")),
+            1,
+        )
         self.assertEqual(len(self._get_refresh_logs(account_id=imap_id, refresh_type="scheduled")), 0)
 
     def test_retry_failed_accounts_only_retries_outlook_accounts(self):
@@ -365,14 +413,26 @@ class RefreshOutlookOnlyTests(unittest.TestCase):
                 INSERT INTO account_refresh_logs (account_id, account_email, refresh_type, status, error_message)
                 VALUES (?, ?, ?, ?, ?)
                 """,
-                (outlook_id, f"retry_out_{unique}@outlook.com", "manual", "failed", "outlook failed"),
+                (
+                    outlook_id,
+                    f"retry_out_{unique}@outlook.com",
+                    "manual",
+                    "failed",
+                    "outlook failed",
+                ),
             )
             conn.execute(
                 """
                 INSERT INTO account_refresh_logs (account_id, account_email, refresh_type, status, error_message)
                 VALUES (?, ?, ?, ?, ?)
                 """,
-                (imap_id, f"retry_imap_{unique}@example.com", "manual", "failed", "imap failed"),
+                (
+                    imap_id,
+                    f"retry_imap_{unique}@example.com",
+                    "manual",
+                    "failed",
+                    "imap failed",
+                ),
             )
             conn.commit()
         finally:
@@ -385,9 +445,19 @@ class RefreshOutlookOnlyTests(unittest.TestCase):
             return True, None, f"rt_retry_{unique}"
 
         with (
-            patch.object(self.graph_service, "test_refresh_token_with_rotation", side_effect=fake_refresh),
-            patch("outlook_web.services.refresh.acquire_distributed_lock", return_value=(True, {})),
-            patch("outlook_web.services.refresh.release_distributed_lock", return_value=None),
+            patch.object(
+                self.graph_service,
+                "test_refresh_token_with_rotation",
+                side_effect=fake_refresh,
+            ),
+            patch(
+                "outlook_web.services.refresh.acquire_distributed_lock",
+                return_value=(True, {}),
+            ),
+            patch(
+                "outlook_web.services.refresh.release_distributed_lock",
+                return_value=None,
+            ),
         ):
             resp = client.post("/api/accounts/refresh-failed")
 
@@ -408,3 +478,96 @@ class RefreshOutlookOnlyTests(unittest.TestCase):
 
         self.assertEqual(len(self._get_refresh_logs(account_id=outlook_id, refresh_type="retry")), 1)
         self.assertEqual(len(self._get_refresh_logs(account_id=imap_id, refresh_type="retry")), 0)
+
+    def test_manual_trigger_scheduled_refresh_conflict_returns_actionable_message(self):
+        client = self.app.test_client()
+        self._login(client)
+
+        unique = uuid.uuid4().hex
+        self._insert_outlook_account(email_addr=f"sch_conflict_{unique}@outlook.com", unique=unique)
+
+        with (
+            patch.object(self.graph_service, "test_refresh_token_with_rotation") as mocked_refresh,
+            patch(
+                "outlook_web.services.refresh.acquire_distributed_lock",
+                return_value=(
+                    False,
+                    {
+                        "owner_id": "another-task",
+                        "acquired_at": 1776393136.5748198,
+                        "expires_at": 1776400336.5748198,
+                    },
+                ),
+            ),
+        ):
+            resp = client.get("/api/accounts/trigger-scheduled-refresh?force=true")
+
+        self.assertEqual(resp.status_code, 200)
+        events = self._parse_sse_events(resp.get_data(as_text=True))
+        self.assertGreaterEqual(len(events), 1)
+        error_event = events[-1]
+        self.assertEqual(error_event.get("type"), "error")
+        error = error_event.get("error") or {}
+        self.assertEqual(error.get("code"), "REFRESH_CONFLICT")
+        self.assertIn("等待当前任务完成后再重试", error.get("message") or "")
+        self.assertIn("Wait for it to finish and retry", error.get("message_en") or "")
+        mocked_refresh.assert_not_called()
+
+    def test_selected_refresh_conflict_returns_actionable_message(self):
+        client = self.app.test_client()
+        self._login(client)
+
+        unique = uuid.uuid4().hex
+        account_id = self._insert_outlook_account(email_addr=f"selected_conflict_{unique}@outlook.com", unique=unique)
+
+        with (
+            patch.object(self.graph_service, "test_refresh_token_with_rotation") as mocked_refresh,
+            patch(
+                "outlook_web.services.refresh.acquire_distributed_lock",
+                return_value=(
+                    False,
+                    {
+                        "owner_id": "another-task",
+                        "acquired_at": 1776393136.5748198,
+                        "expires_at": 1776400336.5748198,
+                    },
+                ),
+            ),
+        ):
+            resp = client.post("/api/accounts/refresh/selected", json={"account_ids": [account_id]})
+
+        self.assertEqual(resp.status_code, 200)
+        events = self._parse_sse_events(resp.get_data(as_text=True))
+        self.assertGreaterEqual(len(events), 1)
+        error_event = events[-1]
+        self.assertEqual(error_event.get("type"), "error")
+        error = error_event.get("error") or {}
+        self.assertEqual(error.get("code"), "REFRESH_CONFLICT")
+        self.assertIn("等待当前任务完成后再重试", error.get("message") or "")
+        self.assertIn("Wait for it to finish and retry", error.get("message_en") or "")
+        mocked_refresh.assert_not_called()
+
+    def test_retry_failed_accounts_conflict_returns_actionable_message(self):
+        client = self.app.test_client()
+        self._login(client)
+
+        with patch(
+            "outlook_web.services.refresh.acquire_distributed_lock",
+            return_value=(
+                False,
+                {
+                    "owner_id": "another-task",
+                    "acquired_at": 1776393136.5748198,
+                    "expires_at": 1776400336.5748198,
+                },
+            ),
+        ):
+            resp = client.post("/api/accounts/refresh-failed")
+
+        self.assertEqual(resp.status_code, 409)
+        data = resp.get_json() or {}
+        self.assertEqual(data.get("success"), False)
+        error = data.get("error") or {}
+        self.assertEqual(error.get("code"), "REFRESH_CONFLICT")
+        self.assertIn("等待当前任务完成后再重试", error.get("message") or "")
+        self.assertIn("Wait for it to finish and retry", error.get("message_en") or "")

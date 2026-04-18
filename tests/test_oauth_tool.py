@@ -24,7 +24,10 @@ class OAuthToolTestBase(unittest.TestCase):
 
             db = get_db()
             db.execute("DELETE FROM settings WHERE key LIKE 'oauth_tool_%'")
-            db.execute("DELETE FROM accounts WHERE email LIKE '%@oauth-test%'")
+            db.execute("DELETE FROM account_claim_logs")
+            db.execute("DELETE FROM account_project_usage")
+            db.execute("DELETE FROM account_refresh_logs")
+            db.execute("DELETE FROM accounts")
             db.commit()
 
         from outlook_web.services import oauth_tool as oauth_tool_service

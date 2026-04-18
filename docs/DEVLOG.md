@@ -1,5 +1,37 @@
 # DEVLOG
 
+## v1.19.0 - 刷新失败可执行提示与 Selected SSE 稳定性修复
+
+发布日期：2026-04-17
+
+### 新增功能
+
+- 新增 selected/refresh-all 刷新失败摘要模板：统一展示错误码、可执行步骤与 trace 反馈指引。
+- 新增 Issue #45 独立回归用例文件：`tests/test_refresh_selected_issue45.py`，覆盖混选场景下 Outlook-only 刷新与 SSE 事件完整性。
+
+### 修复
+
+- 修复 selected 刷新链路对 `sqlite3.Row` 使用 `.get()` 导致的 SSE 提前失败问题（改为 `row["provider"]` 并补齐查询字段）。
+- 修复刷新冲突提示在不同入口语义不一致问题，统一 `REFRESH_CONFLICT` 返回与前端可执行指引。
+- 修复 `NO_MAIL_PERMISSION` 场景下提示笼统的问题，前端新增重新授权与权限补齐建议。
+- 修复 OAuth Tool 空列表测试的共享库污染问题，增强 `setUp()` 关联表清理。
+
+### 重要变更
+
+- 版本号从 `1.18.0` 升级至 `1.19.0`。
+- 同步更新版本口径文件：`README.md`、`README.en.md`、`tests/test_version_update.py`、`CHANGELOG.md`。
+- 发布链路继续沿用 Python + Docker 产物（tar/zip），不引入 Tauri/MSI/NSIS 构建链路。
+
+### 测试/验证
+
+- main 合并后分批全量回归：
+  - Batch1：`Ran 303 tests in 189.896s`，`OK`
+  - Batch2：`Ran 266 tests in 47.230s`，`OK`
+  - Batch3：`Ran 273 tests in 43.359s`，`OK (skipped=7)`
+  - Batch4：`Ran 352 tests in 82.976s`，`OK`
+- 定向回归：`tests.test_refresh_selected_issue45`、`tests.test_refresh_outlook_only`、`tests.test_frontend_account_type_and_refresh_suggestions_contract`、`tests.test_oauth_tool` 均通过。
+- 本地 Docker 人工验收已通过（容器重建后健康检查正常，用户确认通过）。
+
 ## v1.18.0 - 邮箱池项目维度成功复用
 
 发布日期：2026-04-16

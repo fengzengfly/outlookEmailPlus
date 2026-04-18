@@ -3156,6 +3156,26 @@ ${details}
                             if (currentGroupId) {
                                 loadAccountsByGroup(currentGroupId, true);
                             }
+                        } else if (data.type === 'error') {
+                            eventSource.close();
+                            progress.style.display = 'none';
+                            btn.disabled = false;
+                            btn.textContent = translateAppTextLocal('🔄 全量刷新');
+
+                            const errCode = data.error && data.error.code;
+                            if (errCode === 'NO_MAIL_PERMISSION') {
+                                showToast(buildRefreshAllPermissionErrorSummary(data.error || {}), 'error', data.error || null, true);
+                            } else {
+                                const userMessage = window.resolveApiErrorMessage
+                                    ? window.resolveApiErrorMessage(data.error || {}, '刷新过程中出现错误', 'Refresh failed during execution')
+                                    : translateAppTextLocal('刷新过程中出现错误');
+
+                                if (errCode === 'REFRESH_CONFLICT') {
+                                    showToast(userMessage, 'warning', data.error || null, true);
+                                } else {
+                                    showToast(userMessage, 'error', data.error || null, true);
+                                }
+                            }
                         }
                     } catch (e) {
                         console.error('解析进度数据失败:', e);
@@ -3177,6 +3197,39 @@ ${details}
                 btn.textContent = translateAppTextLocal('🔄 全量刷新');
                 showToast(translateAppTextLocal('刷新请求失败'), 'error');
             }
+        }
+
+        function buildRefreshAllPermissionErrorSummary(errorPayload) {
+            const traceId = String(errorPayload && errorPayload.trace_id || '').trim();
+            const lang = getUiLanguage();
+
+            if (lang === 'en') {
+                const lines = [
+                    'This Outlook account is missing mail read permission, so full refresh cannot proceed.',
+                    '[Code] NO_MAIL_PERMISSION',
+                    '',
+                    'Suggested actions:',
+                    '1. Re-authorize the account and ensure Mail.Read or Mail.ReadWrite scope is granted.',
+                    '2. Save account settings and retry full refresh.',
+                    traceId
+                        ? `3. If it still fails, share Trace ID: ${traceId}`
+                        : '3. If it still fails, capture and share the Trace ID for backend diagnostics.',
+                ];
+                return lines.join('\n');
+            }
+
+            const lines = [
+                '当前账号缺少邮件读取权限，导致全量刷新无法继续。',
+                '[Code] NO_MAIL_PERMISSION',
+                '',
+                '建议处理：',
+                '1. 重新授权账号，并确保授予 Mail.Read 或 Mail.ReadWrite 权限。',
+                '2. 保存账号设置后再次执行“全量刷新”。',
+                traceId
+                    ? `3. 若仍失败，请反馈 Trace ID：${traceId}`
+                    : '3. 若仍失败，请记录并反馈 Trace ID 以便后端排查。',
+            ];
+            return lines.join('\n');
         }
 
         // 重试失败的账号
@@ -3224,7 +3277,15 @@ ${details}
                         }
                     }
                 } else {
-                    handleApiError(data, '重试失败');
+                    const errCode = data && data.error && data.error.code;
+                    if (errCode === 'REFRESH_CONFLICT') {
+                        const msg = window.resolveApiErrorMessage
+                            ? window.resolveApiErrorMessage(data.error, '当前已有刷新任务执行中，请等待当前任务完成后再重试', 'Another refresh task is already running. Wait for it to finish and retry.')
+                            : translateAppTextLocal('当前已有刷新任务执行中，请等待当前任务完成后再重试');
+                        showToast(msg, 'warning', data.error || null, true);
+                    } else {
+                        handleApiError(data, '重试失败');
+                    }
                 }
             } catch (error) {
                 progress.style.display = 'none';
@@ -3821,7 +3882,7 @@ ${details}
 
                 if (!response.ok || !response.body) {
                     dismissPersistentToast(toastId);
-                    showToast('刷新请求失败', 'error');
+                    showToast('刷新请求失败，请稍后重试', 'error');
                     return;
                 }
 
@@ -3859,9 +3920,87 @@ ${details}
                 }
             } catch (error) {
                 dismissPersistentToast(toastId);
-                showToast('刷新执行出现错误', 'error');
+                showToast('刷新执行出现错误，请稍后重试', 'error');
                 console.error('batchRefreshSelected error:', error);
             }
+        }
+
+        function buildSelectedRefreshActionGuide(errorPayload) {
+            const lang = getUiLanguage();
+            const code = String(errorPayload && errorPayload.code || '').trim();
+            const traceId = String(errorPayload && errorPayload.trace_id || '').trim();
+            const details = errorPayload && errorPayload.details;
+            const detailText = typeof details === 'string'
+                ? details
+                : (details ? JSON.stringify(details) : '');
+
+            if (code === 'REFRESH_CONFLICT') {
+                if (lang === 'en') {
+                    return [
+                        'Another refresh task is running. Wait for it to finish before retrying.',
+                        'Go to refresh logs and verify the current task has completed.',
+                        traceId ? `If it keeps happening, share Trace ID: ${traceId}` : 'If it keeps happening, capture and share the Trace ID.',
+                    ];
+                }
+                return [
+                    '当前已有刷新任务在执行，请等待其完成后再重试。',
+                    '先到刷新历史确认当前任务已结束。',
+                    traceId ? `若持续出现，请反馈 Trace ID：${traceId}` : '若持续出现，请记录并反馈 Trace ID。',
+                ];
+            }
+
+            if (code === 'REFRESH_SELECTED_STREAM_FAILED') {
+                if (lang === 'en') {
+                    return [
+                        'Recheck selected accounts (status, account type, and authorization fields).',
+                        'Verify network/proxy connectivity and retry selected refresh.',
+                        traceId ? `If retry fails, share Trace ID: ${traceId}` : 'If retry fails, capture and share the Trace ID.',
+                    ];
+                }
+                return [
+                    '请先检查所选账号状态、账号类型与授权字段是否完整。',
+                    '请检查网络/代理连通性后重新执行“Selected 刷新”。',
+                    traceId ? `若重试仍失败，请反馈 Trace ID：${traceId}` : '若重试仍失败，请记录并反馈 Trace ID。',
+                ];
+            }
+
+            if (/token|refresh|aadsts|invalid_grant|proxy|timeout|network/i.test(detailText)) {
+                if (lang === 'en') {
+                    return [
+                        'Re-authorize or refresh credentials for the affected account(s).',
+                        'Check network/proxy settings and retry once.',
+                        traceId ? `Still failing? Share Trace ID: ${traceId}` : 'Still failing? Capture and share the Trace ID.',
+                    ];
+                }
+                return [
+                    '请重新授权或更新异常账号的凭据。',
+                    '请检查网络/代理配置后重试一次。',
+                    traceId ? `仍失败请反馈 Trace ID：${traceId}` : '仍失败请记录并反馈 Trace ID。',
+                ];
+            }
+
+            return lang === 'en'
+                ? [
+                    'Retry the selected refresh once after reloading the page.',
+                    'If the same error repeats, open error details and keep the Trace ID.',
+                    traceId ? `Current Trace ID: ${traceId}` : 'Keep the Trace ID from error details for backend troubleshooting.',
+                ]
+                : [
+                    '请刷新页面后重试一次“Selected 刷新”。',
+                    '若同样错误再次出现，请打开详情并保留 Trace ID。',
+                    traceId ? `当前 Trace ID：${traceId}` : '请保留错误详情中的 Trace ID 供后端排查。',
+                ];
+        }
+
+        function buildSelectedRefreshErrorSummary(errorPayload) {
+            const code = String(errorPayload && errorPayload.code || '').trim();
+            const rawMessage = window.resolveApiErrorMessage
+                ? window.resolveApiErrorMessage(errorPayload, '刷新执行失败', 'Refresh failed')
+                : ((errorPayload && (errorPayload.message || errorPayload.message_en)) || '刷新执行失败');
+            const guide = buildSelectedRefreshActionGuide(errorPayload);
+            const guideText = guide.map((item, idx) => `${idx + 1}. ${item}`).join('\n');
+            const codeLine = code ? `\n[Code] ${code}` : '';
+            return `${rawMessage}${codeLine}\n\n建议处理：\n${guideText}`;
         }
 
         // 处理批量刷新 SSE 事件
@@ -3906,10 +4045,9 @@ ${details}
                 dismissPersistentToast(toastId);
                 const errCode = data.error && data.error.code;
                 if (errCode === 'REFRESH_CONFLICT') {
-                    showToast('⚠️ 当前已有刷新任务执行中，请稍后再试', 'warning', null, true);
+                    showToast(buildSelectedRefreshErrorSummary(data.error), 'warning', data.error || null, true);
                 } else {
-                    const msg = (data.error && (data.error.message || data.error.message_en)) || '刷新执行失败';
-                    showToast(`❌ ${msg}`, 'error', null, true);
+                    showToast(buildSelectedRefreshErrorSummary(data.error || {}), 'error', data.error || null, true);
                 }
             }
         }

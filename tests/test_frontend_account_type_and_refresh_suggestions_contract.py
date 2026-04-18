@@ -39,11 +39,20 @@ class FrontendAccountTypeContractTests(unittest.TestCase):
         groups_js = self._get_text(client, "/static/js/features/groups.js")
 
         self.assertIn("const supportsTokenRefresh = isRefreshableOutlookAccount(acc);", groups_js)
-        self.assertIn("const isFailed = supportsTokenRefresh && acc.last_refresh_status === 'failed';", groups_js)
-        self.assertIn("const defaultMethodLabel = supportsTokenRefresh ? 'Graph' : 'IMAP';", groups_js)
+        self.assertIn(
+            "const isFailed = supportsTokenRefresh && acc.last_refresh_status === 'failed';",
+            groups_js,
+        )
+        self.assertIn(
+            "const defaultMethodLabel = supportsTokenRefresh ? 'Graph' : 'IMAP';",
+            groups_js,
+        )
         self.assertIn('let tokenBadge = `<span class="badge badge-gray">IMAP</span>`;', groups_js)
         self.assertIn("if (supportsTokenRefresh) {", groups_js)
-        self.assertIn('<span class="account-api-tag">${acc.method || defaultMethodLabel}</span>', groups_js)
+        self.assertIn(
+            '<span class="account-api-tag">${acc.method || defaultMethodLabel}</span>',
+            groups_js,
+        )
 
     def test_group_refresh_error_button_passes_account_type_and_provider(self):
         client = self.app.test_client()
@@ -59,10 +68,49 @@ class FrontendAccountTypeContractTests(unittest.TestCase):
         main_js = self._get_text(client, "/static/js/main.js")
         index_html = self._get_text(client, "/")
 
-        self.assertIn("const suggestionsEl = document.getElementById('refreshErrorSuggestions');", main_js)
-        self.assertIn("const suggestions = buildRefreshErrorSuggestions({ accountType, provider, errorMessage });", main_js)
-        self.assertIn("suggestionsEl.innerHTML = suggestions.map(item => `<li>${escapeHtml(item)}</li>`).join('');", main_js)
+        self.assertIn(
+            "const suggestionsEl = document.getElementById('refreshErrorSuggestions');",
+            main_js,
+        )
+        self.assertIn(
+            "const suggestions = buildRefreshErrorSuggestions({ accountType, provider, errorMessage });",
+            main_js,
+        )
+        self.assertIn(
+            "suggestionsEl.innerHTML = suggestions.map(item => `<li>${escapeHtml(item)}</li>`).join('');",
+            main_js,
+        )
         self.assertIn('id="refreshErrorSuggestions"', index_html)
+
+    def test_refresh_all_sse_error_branch_handles_refresh_conflict(self):
+        client = self.app.test_client()
+        main_js = self._get_text(client, "/static/js/main.js")
+
+        self.assertIn("} else if (data.type === 'error') {", main_js)
+        self.assertIn("const errCode = data.error && data.error.code;", main_js)
+        self.assertIn("if (errCode === 'REFRESH_CONFLICT') {", main_js)
+        self.assertIn("showToast(userMessage, 'warning', data.error || null, true);", main_js)
+
+    def test_retry_failed_conflict_branch_uses_warning_with_actionable_message(self):
+        client = self.app.test_client()
+        main_js = self._get_text(client, "/static/js/main.js")
+
+        self.assertIn("if (errCode === 'REFRESH_CONFLICT') {", main_js)
+        self.assertIn("Wait for it to finish and retry.", main_js)
+        self.assertIn("showToast(msg, 'warning', data.error || null, true);", main_js)
+
+    def test_refresh_all_no_mail_permission_uses_actionable_summary(self):
+        client = self.app.test_client()
+        main_js = self._get_text(client, "/static/js/main.js")
+
+        self.assertIn("function buildRefreshAllPermissionErrorSummary(errorPayload)", main_js)
+        self.assertIn("if (errCode === 'NO_MAIL_PERMISSION') {", main_js)
+        self.assertIn("[Code] NO_MAIL_PERMISSION", main_js)
+        self.assertIn("Mail.Read 或 Mail.ReadWrite", main_js)
+        self.assertIn(
+            "showToast(buildRefreshAllPermissionErrorSummary(data.error || {}), 'error', data.error || null, true);",
+            main_js,
+        )
 
     def test_remark_entry_copy_is_updated_in_i18n_template_and_compact_menu(self):
         client = self.app.test_client()
@@ -85,7 +133,9 @@ class FrontendAccountTypeContractTests(unittest.TestCase):
 
 
 class RefreshErrorSuggestionsBehaviorNodeTests(unittest.TestCase):
-    def test_build_refresh_error_suggestions_branches_by_account_type_provider_and_error(self):
+    def test_build_refresh_error_suggestions_branches_by_account_type_provider_and_error(
+        self,
+    ):
         if shutil.which("node") is None:
             self.skipTest("node is not installed")
 

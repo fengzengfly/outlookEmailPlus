@@ -38,7 +38,7 @@ The repository already includes some screenshots, and more can be added later.
 
 Highlights include:
 
-- Current stable version: `v1.18.0`
+- Current stable version: `v1.19.0`
 
 **OAuth Token Tool**
 - Added a dedicated popup-style token tool for **compatibility-mode account import**
