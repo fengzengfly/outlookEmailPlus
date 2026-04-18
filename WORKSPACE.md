@@ -1,4 +1,4 @@
-# WORKSPACE — 工作区操作记录
+﻿# WORKSPACE — 工作区操作记录
 
 > 本文档记录项目开发过程中的操作日志，按日期倒序排列。
 
@@ -614,8 +614,28 @@ CORS(app, resources={
 **当前状态**：
 - 设计讨论已完成，方案定稿，**尚未决定是否开始实施**
 
----
 
+#### 160. 全量测试 + git push 到远端
+
+**时间**：2026-04-18
+
+**操作**：
+`ash
+python -m unittest discover -s tests -v
+git push origin dev
+`
+
+**结果**：
+- 共运行 **1197 个测试**，耗时 360s
+- 通过：1189 个
+- 跳过：7 个
+- 失败：1 个（`test_pool_cf_real_e2e::test_04_claim_complete_timeout_skips_delete`）
+
+**失败分析**：该测试需要真实 CF Worker API（https://temp.zerodotsix.top），本地无网络访问，属于预期内的环境限制，与本次代码变更无关。
+
+**Push**：`e13fcf4 → origin/dev` 推送成功
+
+---
 ## 2026-04-16
 
 ### 操作记录
