@@ -615,6 +615,22 @@ CORS(app, resources={
 - 设计讨论已完成，方案定稿，**尚未决定是否开始实施**
 
 
+#### 164. 发布 v2.0.0 GitHub Release
+
+**时间**：2026-04-18
+
+**版本号**：`1.19.0` → `2.0.0`（浏览器扩展为大版本里程碑）
+
+**修改文件**：`outlook_web/__init__.py`、`README.md`、`README.en.md`、`tests/test_version_update.py`、`CHANGELOG.md`、`docs/DEVLOG.md`
+
+**操作**：
+- `git commit` release 准备提交（`d3f94fc`）+ 推送
+- `gh release create v2.0.0` → https://github.com/ZeroPointSix/outlookEmailPlus/releases/tag/v2.0.0
+
+**结果**：v2.0.0 Release 页面已上线 ✅
+
+---
+
 #### 163. main 分支全量测试 - 全部通过
 
 **时间**：2026-04-18
