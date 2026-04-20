@@ -986,6 +986,36 @@
 - `v2.1.0` 的版本文件、测试结果与本地 release assets 已全部就绪。
 - 下一步进入 release commit、`main` 快进、push/tag 与 GitHub Release 创建。
 
+#### 202. v2.1.0 已发布到 GitHub Release，3 个正式产物已上传
+
+**时间**：2026-04-20
+
+**本次执行结果**：
+
+1. Git 提交流程：
+   - `dev` 新增 release commit：`7cf7557 chore: 准备 v2.1.0 发布`
+   - 主工作树 `main` 已执行 `merge --ff-only dev`，本地 `main` / `dev` 再次对齐
+
+2. 正式发布：
+   - 已创建并推送 tag：`v2.1.0`
+   - 已推送远端 `main`
+   - GitHub Release 地址：
+     - `https://github.com/ZeroPointSix/outlookEmailPlus/releases/tag/v2.1.0`
+
+3. Release 附件：
+   - `browser-extension-v0.2.0.zip`
+   - `outlook-email-plus-v2.1.0-docker.tar`
+   - `outlookEmailPlus-v2.1.0-src.zip`
+
+**补充说明**：
+
+- tag push 后远端 Release 已自动创建；随后补传了本地构建完成的 3 个正式产物。
+
+**当前状态**：
+
+- `v2.1.0` 已完成本地版本收口、远端主分支推送、tag 推送与 GitHub Release 附件上传。
+- 下一步仅剩把这条 `WORKSPACE.md` 发布记录提交并推送到 `main`，作为发布后的仓库现场同步。
+
 ---
 
 ## 2026-04-18
