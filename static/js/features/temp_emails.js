@@ -346,6 +346,12 @@
             if (typeof resetEmailDetailState === 'function') {
                 resetEmailDetailState({ source: 'temp' });
             }
+            if (typeof setTempDetailFocus === 'function') {
+                setTempDetailFocus(false);
+            }
+            if (typeof hideEmailDetailContainer === 'function') {
+                hideEmailDetailContainer({ source: 'temp' });
+            }
             const count = document.getElementById('emailCount');
             if (count) count.textContent = '';
             const tag = document.getElementById('methodTag');
@@ -569,6 +575,9 @@
 
             if (typeof showEmailDetailContainer === 'function') {
                 showEmailDetailContainer({ source: 'temp' });
+            }
+            if (typeof setTempDetailFocus === 'function') {
+                setTempDetailFocus(true);
             }
             if (typeof setEmailDetailToolbarVisibility === 'function') {
                 setEmailDetailToolbarVisibility(true, { source: 'temp' });
