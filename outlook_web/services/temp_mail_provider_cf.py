@@ -33,7 +33,7 @@ from typing import Any
 import requests
 
 from outlook_web.repositories import settings as settings_repo
-from outlook_web.services.temp_mail_provider_base import TempMailProviderBase
+from outlook_web.services.temp_mail_provider_base import TempMailProviderBase, register_provider
 
 logger = logging.getLogger(__name__)
 
@@ -208,6 +208,7 @@ def _normalize_domain_entries(raw_domains: Any, default_domain: str) -> list[dic
 # ---------------------------------------------------------------------------
 
 
+@register_provider
 class CloudflareTempMailProvider(TempMailProviderBase):
     """
     对接 Cloudflare Workers Temp Email 的 Provider 实现。
@@ -221,6 +222,11 @@ class CloudflareTempMailProvider(TempMailProviderBase):
     兼容：若 cf_worker_* 未配置，会回退读取旧 key：
     - ``temp_mail_domains`` / ``temp_mail_default_domain`` / ``temp_mail_prefix_rules``
     """
+
+    provider_name = "cloudflare_temp_mail"
+    provider_label = "Cloudflare Worker"
+    provider_version = "1.0.0"
+    provider_author = "OutlookMail Plus"
 
     def __init__(self, *, provider_name: str | None = None):
         self.provider_name = provider_name or "cloudflare_temp_mail"

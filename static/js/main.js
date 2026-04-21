@@ -2952,9 +2952,13 @@ ${details}
             if (provider === 'legacy_bridge') {
                 if (gptmailPanel) gptmailPanel.style.display = 'block';
                 if (cfWorkerPanel) cfWorkerPanel.style.display = 'none';
-            } else {
+            } else if (provider === 'cloudflare_temp_mail') {
                 if (gptmailPanel) gptmailPanel.style.display = 'none';
                 if (cfWorkerPanel) cfWorkerPanel.style.display = 'block';
+            } else {
+                // 插件 provider：两个内置面板都隐藏
+                if (gptmailPanel) gptmailPanel.style.display = 'none';
+                if (cfWorkerPanel) cfWorkerPanel.style.display = 'none';
             }
         }
 

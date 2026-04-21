@@ -3,6 +3,7 @@ from __future__ import annotations
 from flask import Blueprint
 
 from outlook_web.controllers import system as system_controller
+from outlook_web.security.auth import login_required
 
 
 def create_blueprint() -> Blueprint:
@@ -63,5 +64,10 @@ def create_blueprint() -> Blueprint:
         view_func=system_controller.api_test_watchtower,
         methods=["POST"],
     )
+
+    @bp.post("/api/system/reload-plugins")
+    @login_required
+    def api_reload_plugins():
+        return system_controller.api_reload_plugins()
 
     return bp

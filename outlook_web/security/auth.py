@@ -147,7 +147,8 @@ def login_required(f):
 
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        if not session.get("logged_in"):
+        is_logged_in = bool(session.get("logged_in") or session.get("user_id"))
+        if not is_logged_in:
             if request.is_json or request.path.startswith("/api/"):
                 trace_id_value = None
                 try:

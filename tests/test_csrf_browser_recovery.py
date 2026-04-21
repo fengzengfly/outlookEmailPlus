@@ -219,11 +219,17 @@ class CsrfBrowserRecoveryTests(unittest.TestCase):
             page.click("#loginBtn")
             # 该用例的关注点是「CSRF 过期后自动重试一次」；
             # 登录跳转本身在 CI/全量用例并发资源竞争时可能略慢，默认 30s 偶发超时会导致用例抖动。
-            # 因此这里显式放宽等待时间，降低偶发环境波动对主断言的干扰。
+            # 因此这里显式放宽等待时间，并改为等待可交互 DOM，而不是等待所有后台请求彻底静默。
             page.wait_for_url(re.compile(r".*/$"), timeout=60_000)
-            page.wait_for_load_state("networkidle")
+            page.locator("#app").wait_for(timeout=15_000)
             page.locator('.nav-item[data-page="mailbox"]').click()
-            page.wait_for_load_state("networkidle")
+            page.wait_for_function(
+                """() => {
+                    const mailboxPage = document.getElementById('page-mailbox');
+                    return mailboxPage && !mailboxPage.classList.contains('page-hidden');
+                }""",
+                timeout=15_000,
+            )
             page.wait_for_function("""() => {
                     const select = document.getElementById('importGroupSelect');
                     return select && select.options.length > 0;

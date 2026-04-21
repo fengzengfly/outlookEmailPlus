@@ -4,31 +4,44 @@ import json
 from typing import Any, Dict
 
 from outlook_web import config
-from outlook_web.db import get_db
+from outlook_web.db import create_sqlite_connection, get_db
 from outlook_web.security.crypto import decrypt_data
 
 DEFAULT_TEMP_MAIL_PROVIDER = "custom_domain_temp_mail"
 LEGACY_TEMP_MAIL_PROVIDER = "legacy_bridge"
 CLOUDFLARE_TEMP_MAIL_PROVIDER = "cloudflare_temp_mail"
 LEGACY_TEMP_MAIL_PROVIDER_NAMES = {"legacy_bridge", "legacy_gptmail", "gptmail"}
-SUPPORTED_TEMP_MAIL_PROVIDERS = {
-    DEFAULT_TEMP_MAIL_PROVIDER,
-    LEGACY_TEMP_MAIL_PROVIDER,
-    CLOUDFLARE_TEMP_MAIL_PROVIDER,
-}
 
 
 def get_setting(key: str, default: str = "") -> str:
     """获取设置值"""
-    db = get_db()
-    cursor = db.execute("SELECT value FROM settings WHERE key = ?", (key,))
-    row = cursor.fetchone()
-    return row["value"] if row else default
+    db = None
+    temp_conn = False
+    try:
+        db = get_db()
+    except RuntimeError:
+        db = create_sqlite_connection()
+        temp_conn = True
+
+    try:
+        cursor = db.execute("SELECT value FROM settings WHERE key = ?", (key,))
+        row = cursor.fetchone()
+        return row["value"] if row else default
+    finally:
+        if temp_conn and db is not None:
+            db.close()
 
 
 def set_setting(key: str, value: str, *, commit: bool = True) -> bool:
     """设置值"""
-    db = get_db()
+    db = None
+    temp_conn = False
+    try:
+        db = get_db()
+    except RuntimeError:
+        db = create_sqlite_connection()
+        temp_conn = True
+
     try:
         db.execute(
             """
@@ -42,14 +55,28 @@ def set_setting(key: str, value: str, *, commit: bool = True) -> bool:
         return True
     except Exception:
         return False
+    finally:
+        if temp_conn and db is not None:
+            db.close()
 
 
 def get_all_settings() -> Dict[str, str]:
     """获取所有设置"""
-    db = get_db()
-    cursor = db.execute("SELECT key, value FROM settings")
-    rows = cursor.fetchall()
-    return {row["key"]: row["value"] for row in rows}
+    db = None
+    temp_conn = False
+    try:
+        db = get_db()
+    except RuntimeError:
+        db = create_sqlite_connection()
+        temp_conn = True
+
+    try:
+        cursor = db.execute("SELECT key, value FROM settings")
+        rows = cursor.fetchall()
+        return {row["key"]: row["value"] for row in rows}
+    finally:
+        if temp_conn and db is not None:
+            db.close()
 
 
 def get_login_password() -> str:
@@ -89,16 +116,18 @@ def normalize_temp_mail_provider_name(value: str | None) -> str:
 
 
 def get_supported_temp_mail_provider_names() -> set[str]:
-    return set(SUPPORTED_TEMP_MAIL_PROVIDERS)
+    from outlook_web.temp_mail_registry import _REGISTRY
+
+    return set(_REGISTRY.keys())
 
 
 def is_supported_temp_mail_provider_name(value: str | None) -> bool:
-    return normalize_temp_mail_provider_name(value) in SUPPORTED_TEMP_MAIL_PROVIDERS
+    return normalize_temp_mail_provider_name(value) in get_supported_temp_mail_provider_names()
 
 
 def validate_temp_mail_provider_name(value: str | None) -> str:
     normalized = normalize_temp_mail_provider_name(value)
-    if normalized not in SUPPORTED_TEMP_MAIL_PROVIDERS:
+    if normalized not in get_supported_temp_mail_provider_names():
         raise ValueError("临时邮箱 Provider 配置无效")
     return normalized
 

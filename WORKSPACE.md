@@ -4,6 +4,935 @@
 
 ---
 
+## 2026-04-21
+
+### 操作记录
+
+#### 226. 检索 OpenCode Go 套餐计费模式并同步文档
+
+**时间**：2026-04-21
+
+**背景**：
+用户要求检索 opencode go 套餐的计费模式，并根据实际检索结果修改相关文档，将操作及时记录到 WORKSPACE.md。
+
+**检索来源**：
+- https://opencode.ai/go
+- https://opencode.ai/zen
+- https://opencode.ai/enterprise
+
+**OpenCode Go 计费模式实际结果**：
+
+| 项目 | 详情 |
+|------|------|
+| 套餐名称 | OpenCode Go |
+| 首月价格 | $5 |
+| 续费价格 | $10/月 |
+| 计费方式 | 订阅制，按月扣费 |
+| 取消政策 | 可随时取消 |
+| 额外充值 | 支持 Top up credit |
+| 适用对象 | 可与任何 coding agent 配合使用（不限于 OpenCode） |
+
+**Go 套餐包含模型及 5 小时请求限额**：
+
+| 模型 | 每 5 小时请求数 |
+|------|----------------|
+| Big Pickle + free models | 200 |
+| GLM-5.1 | 880 |
+| Kimi K2.6 | 3,450（当前享 3 倍用量，限时至 4 月 27 日） |
+| MiMo-V2-Pro | 1,290 |
+| Qwen3.6 Plus | 3,300 |
+| MiniMax M2.7 | 3,400 |
+| Qwen3.5 Plus | 10,200 |
+| 其他包含 | GLM-5、Kimi K2.5、MiMo-V2-Omni、MiniMax M2.5 |
+
+**同平台其他方案对比**：
+
+| 方案 | 定价模式 | 特点 |
+|------|---------|------|
+| **Go** | $5 首月，之后 $10/月 | 订阅制，慷慨限额，适合高频使用 |
+| **Zen** | 预存 $20 + $1.23 手续费，按请求扣费 | 零加价，余额低于 $5 自动续充，更灵活 |
+| **Enterprise** | 联系销售定制 | 企业级部署、SSO、内部 AI 网关集成 |
+| **Free** | 免费 | 仅包含基础免费模型，限额较低 |
+
+**当前状态**：
+OpenCode Go 套餐计费模式已确认并记录到 WORKSPACE.md。如需整理为独立知识库文档（如 docs/ 下的外部资料备忘），可继续执行。
+
+---
+
+#### 211. 临时邮箱 Provider 插件化 — 修复 D-INST-04 与 D-INST-09，测试全绿
+
+**时间**：2026-04-21
+
+**背景**：
+`tests/test_temp_mail_plugin_manager.py` 剩余 2 个失败用例（D-INST-04、D-INST-09），目标在不修改实现文件的前提下分析根因并修复。
+
+**根因分析**：
+
+1. **D-INST-04**：
+   - `MOCK_REGISTRY_JSON` 中 `sha256: "abc123"` 是 6 位字符串，不符合合法 SHA256 格式（需 64 位十六进制）。
+   - 实现层的校验逻辑：只有当 sha256 字段为合法 64 位十六进制时才实际比对；`"abc123"` 被跳过。
+   - D-INST-01/08/10 同样使用 `"abc123"` 且期望成功 → 与 D-INST-04 期望失败构成夹具冲突。
+   - **修复**：在 D-INST-04 内部覆写 registry，提供合法格式（`"a" * 64`）但与实际内容不匹配的 sha256，与 D-INST-03 思路对称。
+
+2. **D-INST-09**：
+   - 原代码 `shutil.rmtree(backup.parent)` 删除整个 `plugins/` 目录，连同 `registry.json` 一起删除。
+   - 该测试按字母序首先运行，此时 `_AVAILABLE_PLUGINS_CACHE` 为空，registry 缺失后 `install_plugin("mock_mgr")` 抛 `PLUGIN_NOT_FOUND`。
+   - **修复**：改为 `shutil.rmtree(backup)` 仅删除 `temp_mail_providers/` 子目录，保留 `registry.json`，测试意图"插件目录不存在时自动创建"完整覆盖，无副作用。
+
+**修改文件**：
+- `tests/test_temp_mail_plugin_manager.py`（仅修改上述两个测试方法）
+
+**本次测试结果**：
+- `tests/test_temp_mail_plugin_manager.py` → `31/31 passed` ✅（全绿）
+
+**文档更新**：
+- `docs/TDD/2026-04-21-临时邮箱插件化TDD.md`：更新当前状态为 `31/31 passed`，补充 D-INST-04 和 D-INST-09 的准确场景描述
+
+---
+
+#### 212. 临时邮箱 Provider 插件化 — 修复 E2E 测试，插件化专项全量 89/89
+
+**时间**：2026-04-21
+
+**背景**：
+在完成 D 层全绿（31/31）后继续推进，发现 `tests/test_temp_mail_plugin_e2e.py` 有 3 个失败用例（H-E2E-04、H-E2E-05、H-E2E-06）。
+
+**根因分析**：
+
+1. **H-E2E-04**（`test_e2e_config_persistence`）：  
+   `install_plugin()` 写入文件但不加载插件，`read_plugin_config()` 需要 `_REGISTRY` 中存在插件（用于读取 `config_schema`），但测试缺少 `reload_plugins()` 调用 → 抛 `PLUGIN_NOT_LOADED`。  
+   **修复**：在 `install_plugin()` 之后插入 `reload_plugins()` 调用。
+
+2. **H-E2E-05**（`test_e2e_reload_with_updated_plugin`）：  
+   `from outlook_web.services.temp_mail_plugin_factory import reload_plugins` — 模块名错误（typo），实际模块为 `temp_mail_provider_factory`。  
+   **修复**：改为 `from outlook_web.services.temp_mail_provider_factory import reload_plugins`。
+
+3. **H-E2E-06**（`test_e2e_plugin_provider_business_chain`）：同 H-E2E-05，模块名 typo。  
+   **修复**：同上。
+
+**修改文件**：
+- `tests/test_temp_mail_plugin_e2e.py`（仅修改上述三个测试方法）
+
+**本次测试结果**：
+- `tests/test_temp_mail_plugin_e2e.py` → `6/6 passed` ✅
+- **插件化专项全量：89/89 passed ✅**（`python -m unittest discover -s tests -p "test_temp_mail_plugin_*.py"`）
+
+**文档更新**：
+- `docs/TDD/2026-04-21-临时邮箱插件化TDD.md`：状态更新为 89/89 全绿，新增 E2E 测试结果
+- `docs/TODO/2026-04-21-临时邮箱插件化TODO.md`：D 层与 H 层用例全部勾选为 `[x]`，TDD 基线更新为 89/89
+
+---
+
+#### 213. 临时邮箱 Provider 插件化 — M4 前端插件管理 UI
+
+**时间**：2026-04-21
+
+**背景**：
+后端全量 89/89 通过后，按 TODO M4 推进前端插件管理 UI 实现。
+
+**本次实现**：
+
+1. **新增 `static/js/features/plugins.js`**
+   - `PluginManager` 全局 IIFE 对象，提供完整的插件管理 UI 逻辑
+   - `loadPlugins()` → `GET /api/plugins`，渲染已安装/可安装/加载失败三态插件列表
+   - `install(name, url)` → `POST /api/plugins/install`
+   - `confirmUninstall` / `uninstall(name)` → `POST /api/plugins/{name}/uninstall`
+   - `toggleConfig(name)` → 并行拉取 schema + 当前配置，动态生成表单（支持 text/password/number/url/textarea/select/toggle 字段类型）
+   - `saveConfig(name)` → `POST /api/plugins/{name}/config`
+   - `testConnection(name)` → `POST /api/plugins/{name}/test-connection`
+   - `applyChanges()` → `POST /api/system/reload-plugins`，热刷新后自动重新加载列表
+   - `_refreshProviderRadios()` / `_refreshProviderSelect()`：安装的插件自动注入设置页 radio 组和临时邮箱页的 provider select
+    - 自定义安装 modal 控制：`openCustomInstallModal` / `closeCustomInstallModal` / `customInstall`
+
+2. **修改 `templates/index.html`**
+   - 在 `settings-tab-temp-mail` 末尾新增「插件管理」卡片（折叠态，点击展开）
+   - 含 badge 显示已安装插件数，首次展开时自动 `loadPlugins()`
+
+3. **修改 `templates/partials/modals.html`**
+   - 新增「自定义安装插件」模态框，含插件名称 + 下载 URL 两个必填项，以及安全警示文案
+
+4. **修改 `templates/partials/scripts.html`**
+   - 在最后一行追加 `plugins.js` 的加载
+
+5. **修改 `static/js/main.js`**
+   - `onTempMailProviderChange()` 新增 `cloudflare_temp_mail` 专属分支，避免选中插件 provider 时错误展示 CF Worker 面板
+
+**验证**：
+- 页面加载检查：`plugins.js`、`pluginManagerCard`、`pluginCustomInstallModal` 三项均存在于渲染 HTML 中 ✅
+- 插件化专项全量回归：89/89 passed ✅（未引入新失败）
+
+---
+
+#### 214. 临时邮箱 Provider 插件化 — 按当前工作树重跑确认专项 89/89
+
+**时间**：2026-04-21
+
+**背景**：
+在用户明确要求“以我本地刚跑结果为准”后，继续核对时发现当前工作树中的 `tests/test_temp_mail_plugin_manager.py` 与 `WORKSPACE` 已经前进到更新状态。为避免继续用旧结论覆盖新代码，本轮改为直接以**当前工作树**重跑插件化专项并回填文档。
+
+**本次实际执行**：
+1. 重新核对 `tests/test_temp_mail_plugin_manager.py`
+   - `D-INST-04` 已改为使用一个格式合法但故意错误的 64 位 `sha256`
+   - `D-INST-09` 已改为仅删除 `temp_mail_providers/` 子目录，保留 `registry.json`
+2. 重新执行：
+   - `python -m pytest tests/test_temp_mail_plugin_manager.py -v --tb=short` → `31/31 passed`
+   - `python -m pytest tests/test_temp_mail_plugin_e2e.py -v --tb=short` → `6/6 passed`
+   - `python -m pytest (Get-ChildItem 'tests\\test_temp_mail_plugin_*.py' | ForEach-Object { $_.FullName }) -v --tb=short` → `89/89 passed`
+
+**结论**：
+1. 以当前工作树为准，插件化后端与 CLI 专项已达到 **89/89 passed**。
+2. 先前的 `29/31` 结论对应的是更早的一版本地视图，已不再代表当前仓库真实状态。
+3. 本轮已继续将相关会话文档回填到“当前工作树已 89/89 passed”的真实状态。
+
+---
+
+#### 215. 临时邮箱 Provider 插件化 — 收口 M4 真实缺口并继续回填文档
+
+**时间**：2026-04-21
+
+**背景**：
+用户选择继续推进 M4 前端插件管理 UI，并要求每次行动前先充分获取上下文，同时把相关结果及时回填到会话文档与 `WORKSPACE.md`。重新核对当前工作树后，发现 M4 代码主体其实已在仓库中，但仍有一处真实缺口和多处文档口径滞后。
+
+**本次核对结论**：
+1. `templates/index.html`、`templates/partials/modals.html`、`templates/partials/scripts.html`、`static/js/features/plugins.js` 均已存在，说明插件管理卡片、模态框与脚本接入已经落地。
+2. 当前真实缺口是：插件 provider 的注入逻辑只会在 `PluginManager.loadPlugins()` 执行后生效，而该函数原先依赖用户先展开插件管理卡片；因此已安装插件不会在页面初始进入时自动出现在设置页 provider radio 与临时邮箱页 provider select 中。
+3. 另外，折叠态 badge 虽然已写入文本，但模板初始是 `display:none`，现状下不会显示“已安装数量”。
+
+**本次修改**：
+1. 修改 `static/js/features/plugins.js`
+   - 新增 `init()`，页面加载后自动执行 `loadPlugins()`，确保插件 provider 在未展开卡片时也会自动注入到页面现有 DOM。
+   - 修正 `pluginManagerBadge` 的显示逻辑，加载后显式显示 badge。
+   - 在 `_refreshProviderRadios()` / `_refreshProviderSelect()` 中保留用户当前选择，避免刷新插件列表后把当前 provider 选择意外重置。
+2. 修改文档回填实际状态
+   - `docs/TODO/2026-04-21-临时邮箱插件化TODO.md`：将 M4 改为“代码已落地，浏览器级手动验收待做”，并把 T4.3 的实现口径修正为 `plugins.js` 注入而非 `temp_emails.js` 单独改造。
+   - `docs/FD/2026-04-21-临时邮箱插件化FD.md`：把前端模块函数名、provider 集成方式、文件变更清单修正为当前工作树实际实现。
+   - `docs/TD/2026-04-21-临时邮箱插件化TD.md`：补充“示意代码仅供参考，实际以前端现有实现为准”，并把 M4 勾选状态改为代码已落地。
+
+**当前状态**：
+1. M4 前端插件管理 UI 的代码主干已落地，且本轮补上了“页面初始自动注入插件 provider / badge 可见”的真实缺口。
+2. 浏览器级手动验收仍未在本会话执行，因此文档继续保持“实现已落地、手动验收待做”的口径。
+
+---
+
+#### 216. 临时邮箱 Provider 插件化 — 继续清理顶部摘要口径
+
+**时间**：2026-04-21
+
+**背景**：
+在完成 M4 代码缺口修正与文档回填后，继续核对插件化主文档顶部摘要时，仍发现少量旧口径写成“当前主要剩余是 M4 落地阶段”，与当前工作树真实状态不一致。
+
+**本次修改**：
+1. `docs/TODO/2026-04-21-临时邮箱插件化TODO.md`
+   - 将顶部“当前主要差异”修正为：当前工作树下插件化后端、CLI 与 M4 前端代码主干已落地；后续主要剩余 M4 浏览器级手动验收与 M5 全量回归。
+2. `docs/FD/2026-04-21-临时邮箱插件化FD.md`
+   - 将“当前实施状态”修正为：M1~M4 代码主干已落地，剩余工作聚焦于 M4 手动验收与全量回归。
+
+**当前状态**：
+1. 插件化相关主文档顶部摘要已进一步与当前工作树现状对齐。
+2. 若继续严格按 TODO 推进，下一步应在 **T4.4 浏览器级手动验收** 与 **M5 全量回归** 之间明确方向。
+
+---
+
+#### 217. 临时邮箱 Provider 插件化 — 按用户决定先只继续文档回填
+
+**时间**：2026-04-21
+
+**背景**：
+在明确“按 TODO 继续推进”后，我先补齐了 M5 相关文档上下文。随后用户进一步明确：**先只继续修改文档，后面再跑全量测试**。因此本轮不执行 T4.4 浏览器级手动验收，也不实际运行 M5 全量回归，只继续把文档状态修正为当前真实进度。
+
+**本次修改**：
+1. `docs/TODO/2026-04-21-临时邮箱插件化TODO.md`
+   - T4.4 当前状态改为：本会话按当前决策先不执行浏览器级手动点验。
+   - M5 目标改为：插件化专项与 E2E 已通过，当前主要剩余全量回归未执行。
+   - T5.2 补充当前状态：本会话先继续文档回填，暂不执行全量回归。
+   - T5.3 改为已完成：插件化专项全量 `89/89` 已确认通过。
+2. `docs/TD/2026-04-21-临时邮箱插件化TD.md`
+   - M5 阶段改为：插件化专项已 `89/89 passed`，剩余为全量回归与后续如需发布前的浏览器级手动验收。
+
+**当前状态**：
+1. 文档层面已经明确区分：
+   - **已完成**：插件化专项全量、E2E、M4 代码主干
+   - **未执行**：T4.4 浏览器级手动验收、M5 全量回归
+2. 本轮没有运行新的测试命令，纯属状态回填。
+
+---
+
+#### 218. 临时邮箱 Provider 插件化 — 修正 TD 中残留的旧测试文件口径
+
+**时间**：2026-04-21
+
+**背景**：
+继续只做文档回填时，再次扫描插件化主文档，发现 `docs/TD/2026-04-21-临时邮箱插件化TD.md` 中仍残留早期设计期的单文件测试名 `tests/test_temp_mail_plugin_system.py`，以及与当前工作树不完全一致的前端文件变更清单。
+
+**本次修改**：
+1. `docs/TD/2026-04-21-临时邮箱插件化TD.md`
+   - 将“测试文件”由单文件 `tests/test_temp_mail_plugin_system.py` 改为当前真实拆分的 7 个专项测试文件：
+     - registry / factory / loader / manager / api / cli / e2e
+   - 将文件变更清单中的前端部分修正为：
+     - `templates/partials/modals.html`
+     - `templates/partials/scripts.html`
+     - `templates/index.html`
+   - 将测试文件清单修正为 `tests/test_temp_mail_plugin_*.py` 的拆分形态。
+   - 将底部测试摘要改为：当前工作树插件化测试已拆分为 7 个专项文件，共 89 个用例。
+
+**当前状态**：
+1. TD 中“测试文件结构”与“前端文件变更清单”现已与当前工作树更一致。
+2. 本轮依然没有运行新的测试命令，只继续做文档口径收口。
+
+---
+
+#### 219. 临时邮箱 Provider 插件化 — 进入 M5 回归并修复模块边界失败
+
+**时间**：2026-04-21
+
+**背景**：
+用户明确要求开始跑全量测试并继续推进 TODO。实际执行 `python -m unittest discover -s tests -v` 后，回归没有直接得到完整结果，而是先暴露出两类真实状态：一是完整 discover 会卡在首个 Playwright 浏览器流用例；二是在排除浏览器 unittest 的回归中，存在 2 个模块边界失败。
+
+**本次实际结果**：
+1. 直接执行：
+   - `python -m unittest discover -s tests -v`
+   - 运行停在 `tests/test_account_edit_browser_flow.py::test_browser_can_edit_outlook_remark_without_reentering_credentials`
+   - 当前无法把“完整 discover 全绿”标记为已完成
+2. 浏览器 unittest 之外的全量回归（首次）：
+   - `1330 tests`，`FAILED (failures=2, skipped=7)`
+   - 两个失败均为 **模块边界违规**
+     - `outlook_web/repositories/settings.py` 导入了 `outlook_web.services.temp_mail_provider_base`
+     - `outlook_web/routes/system.py` 导入了 `outlook_web.services.temp_mail_provider_factory`
+3. 修复后再验证：
+   - `python -m unittest tests.test_module_boundaries -v` → `Ran 3 tests`，`OK`
+   - `python -m unittest discover -s tests -p "test_temp_mail_plugin_*.py" -v` → `Ran 89 tests`，`OK`
+   - 再次执行排除浏览器 unittest 的全量回归 → `Ran 1330 tests in 552.761s`，`OK (skipped=7)`
+
+**本次代码修改**：
+1. 新增 `outlook_web/temp_mail_registry.py`
+   - 将 provider 注册表下沉到中性模块，避免 repository 直接依赖 service 层
+2. 修改 `outlook_web/services/temp_mail_provider_base.py`
+   - 改为复用中性注册表模块
+3. 修改 `outlook_web/repositories/settings.py`
+   - `get_supported_temp_mail_provider_names()` 改为从中性注册表读取
+4. 修改 `outlook_web/services/temp_mail_provider_factory.py`
+   - 改为从中性注册表读取 `_REGISTRY`
+5. 修改 `outlook_web/services/temp_mail_plugin_manager.py`
+   - 改为从中性注册表读取/移除 provider
+6. 修改 `outlook_web/controllers/system.py` 与 `outlook_web/routes/system.py`
+   - `reload_plugins()` 的 service 依赖下沉到 controller，route 层只调 controller，恢复分层约定
+
+**文档回填**：
+1. `docs/TODO/2026-04-21-临时邮箱插件化TODO.md`
+   - M5 改为：插件化专项、E2E 与非浏览器全量回归已通过；剩余阻塞为 2 个 Playwright unittest
+2. `docs/FD/2026-04-21-临时邮箱插件化FD.md`
+   - 顶部状态补充非浏览器全量回归 `1330 tests` 已通过
+   - 文件变更清单补入 `outlook_web/temp_mail_registry.py`
+3. `docs/TD/2026-04-21-临时邮箱插件化TD.md`
+   - 当前状态补入非浏览器全量回归结果
+   - 文件清单补入中性注册表模块
+4. `docs/TDD/2026-04-21-临时邮箱插件化TDD.md`
+   - 当前核对状态补入：完整 discover 卡在浏览器 unittest；非浏览器全量回归 `1330 tests` 已通过
+
+**当前状态**：
+1. 插件化专项：`89/89 passed`
+2. 模块边界失败：已修复并通过针对性验证
+3. 非浏览器全量回归：`1330 tests`，`OK (skipped=7)`
+4. 剩余阻塞：`tests/test_account_edit_browser_flow.py` 与 `tests/test_csrf_browser_recovery.py` 两个 Playwright unittest，尚未收口
+
+---
+
+#### 220. 临时邮箱 Provider 插件化 — 记录浏览器 unittest 延后修复决策
+
+**时间**：2026-04-21
+
+**背景**：
+在拿到 M5 的实际回归结果后，用户明确表示：先继续按 TODO 推进，并把当前测试结果记录下来；`tests/test_account_edit_browser_flow.py` 与 `tests/test_csrf_browser_recovery.py` 这两个 Playwright unittest 的卡点后续再修复。
+
+**本次修改**：
+1. `docs/TODO/2026-04-21-临时邮箱插件化TODO.md`
+   - 在 T5.2 当前状态中补充一条决策口径：这 2 个 Playwright unittest 先记录结果，后续再单独修复。
+
+**当前状态**：
+1. 当前会话对 M5 的结论已经明确：
+   - 插件化专项：已通过
+   - 非浏览器全量回归：已通过
+   - 2 个 Playwright unittest：结果已记录，修复延后
+2. 本轮没有新增测试执行，仅补记用户的推进决策。
+
+---
+
+#### 221. 临时邮箱 Provider 插件化 — 梳理下一轮准备清单
+
+**时间**：2026-04-21
+
+**背景**：
+在用户要求“继续梳理 TODO 剩余项并做下一轮准备”后，我先重新读取了 TODO 中所有未完成项，确认当前真正剩余的不是泛泛的“还没做完”，而是两个明确的收尾方向：浏览器级手动验收，以及 2 个 Playwright unittest 的卡点修复。
+
+**本次修改**：
+1. `docs/TODO/2026-04-21-临时邮箱插件化TODO.md`
+   - 新增“**5. 下一轮准备（截至当前会话）**”小节
+   - 明确写出：
+     - 若继续 M5，应优先单独排查 `tests/test_account_edit_browser_flow.py` 与 `tests/test_csrf_browser_recovery.py`
+     - 若继续 M4，应按 mockup 完成 6 项浏览器级手动验收
+     - 当前已可复用的结果基线：插件化专项 `89/89 passed`、非浏览器全量回归 `1330 tests` 通过
+     - 本阶段不再重复做的动作：插件专项重跑、模块边界失败复记
+
+**当前状态**：
+1. TODO 已经不仅能反映“现在做到哪”，也能直接指导“下一轮先做什么”。
+2. 本轮继续只做文档整理，没有新增测试执行。
+
+---
+
+#### 222. 临时邮箱 Provider 插件化 — 补充 TODO 顶部完成度概览
+
+**时间**：2026-04-21
+
+**背景**：
+用户直接追问“TODO 效果怎么样了，完成到哪里了”。为避免每次都需要从分散的勾选项里人工推断状态，本轮把当前会话已经确认的里程碑进度直接收敛成一张概览表，放到 TODO 顶部。
+
+**本次修改**：
+1. `docs/TODO/2026-04-21-临时邮箱插件化TODO.md`
+   - 新增“**2.1 当前完成度概览**”表格
+   - 逐项总结：
+     - M1：已完成
+     - M2：已完成
+     - M3：已完成
+     - M4：代码主干已完成，浏览器级手动验收暂缓
+     - M5：插件化专项 `89/89`、E2E 与非浏览器全量回归已通过；2 个 Playwright unittest 后续再修
+
+**当前状态**：
+1. 现在只看 TODO 顶部，就能快速知道本任务已经推进到哪个里程碑。
+2. 本轮仍然只是文档整理，没有新增测试执行。
+
+---
+
+#### 223. 临时邮箱 Provider 插件化 — 完成 T4.4 浏览器级手动验收
+
+**时间**：2026-04-21
+
+**背景**：
+用户明确要求按 TODO 顺序继续推进，先完成 T4.4「前端手动验收」，并且要求实际“启动一下看一下”。最初尝试 detached 启动 `web_outlook_app.py` 时，外部进程未能稳定提供可访问页面，因此本轮改用与现有浏览器测试一致的方式：在单次脚本中临时启动测试内 Web 服务，再用 Playwright 对插件管理 UI 做真实交互验收。
+
+**本次实际执行**：
+1. 使用 `tests._import_app.import_web_app_module()` + `werkzeug.serving.make_server()` 启动临时本地 Web 服务。
+2. 使用 Playwright 打开真实设置页，并对插件接口做 route mock，分别覆盖：
+   - 折叠态：标题与已安装数量 badge
+   - 展开态：已安装 / 可安装 / 加载失败三类插件项
+   - 安装流程：点击安装后的成功提示
+   - 配置态：动态表单渲染、测试连接、保存配置
+   - 错误态：加载失败错误信息展示
+   - 自定义安装：模态框输入名称和 URL 后完成提交
+3. 首次脚本运行时仅因当前 Playwright 版本不支持 `page.expect_dialog()` 中断；改为 `page.on('dialog', ...)` 后补跑通过。
+
+**本次实际结果**：
+1. T4.4 共 10 个检查点全部通过，最终输出：
+   - `总检查项: 10`
+   - `失败项: 0`
+2. 结论上可将 M4 从“代码主干已完成、手动验收暂缓”更新为“代码主干与浏览器级手动验收均已完成”。
+
+**本次文档更新**：
+1. `docs/TODO/2026-04-21-临时邮箱插件化TODO.md`
+   - 将 M4 完成度更新为已完成
+   - 勾选 T4.4 的 6 个验收项
+   - 将“下一轮准备”中的 M4 项改为已完成、无需重复执行
+2. `docs/FD/2026-04-21-临时邮箱插件化FD.md`
+   - 顶部当前实施状态补入：浏览器级手动验收已完成
+3. `docs/TD/2026-04-21-临时邮箱插件化TD.md`
+   - 将 M5 小结中的浏览器级手动验收改为已完成
+
+**当前状态**：
+1. 插件化任务现已完成 M1、M2、M3、M4。
+2. 当前剩余主阻塞仅为完整 `python -m unittest discover -s tests -v` 中的 2 个 Playwright unittest 卡点。
+
+---
+
+#### 224. 临时邮箱 Provider 插件化 — 修复浏览器 unittest 等待条件并拿到完整 discover 绿灯
+
+**时间**：2026-04-21
+
+**背景**：
+在完成 T4.4 浏览器级手动验收后，用户明确要求继续推进 M5，并再次强调所有动作前先充分获取上下文、同时持续同步会话文档与 `WORKSPACE.md`。重新核对 `tests/test_account_edit_browser_flow.py` 与 `tests/test_csrf_browser_recovery.py` 后，发现两者都依赖 `page.wait_for_load_state("networkidle")`，而页面初始化阶段本身会并发触发 `groups / accounts / settings / version-check / plugins` 等后台请求，这使“页面可操作”与“网络彻底静默”被混为一谈，导致完整 discover 场景更容易卡住。
+
+**本次排查与验证**：
+1. 先单跑两个浏览器 unittest：
+   - `python -m unittest tests.test_account_edit_browser_flow.AccountEditBrowserFlowTests.test_browser_can_edit_outlook_remark_without_reentering_credentials -v`
+   - `python -m unittest tests.test_csrf_browser_recovery.CsrfBrowserRecoveryTests.test_browser_recovers_after_stale_csrf_token_and_retries_once -v`
+   - 两者均可单独通过
+2. 查询 Playwright 官方资料后，确认 `networkidle` 更适合等待网络空闲，不适合作为 UI ready 的主要断言；更推荐用 URL / locator / DOM 状态等 web-first 等待。
+3. 修改：
+   - `tests/test_account_edit_browser_flow.py`
+   - `tests/test_csrf_browser_recovery.py`
+   - 将登录后的 `networkidle` 等待改为：
+     - `wait_for_url(..., timeout=60_000)`
+     - `#app` 可见
+     - `#page-mailbox` 不再带 `page-hidden`
+     - 再等待该测试真正关心的控件/数据出现
+4. 修改后再次验证：
+   - `python -m unittest tests.test_account_edit_browser_flow tests.test_csrf_browser_recovery -v` → `Ran 2 tests`，`OK`
+   - `python -m unittest discover -s tests -v` → `Ran 1332 tests in 352.180s`，`OK (skipped=7)`
+
+**本次文档更新**：
+1. `docs/TODO/2026-04-21-临时邮箱插件化TODO.md`
+   - 将 M5 更新为已完成
+   - 将 T5.2 当前状态改为完整 discover 已通过
+   - 将顶部“当前主要差异”与“下一轮准备”改为已收口口径
+2. `docs/FD/2026-04-21-临时邮箱插件化FD.md`
+   - 顶部当前实施状态补入完整 discover 通过结果
+3. `docs/TDD/2026-04-21-临时邮箱插件化TDD.md`
+   - 将“浏览器 unittest 卡住”更新为“等待条件修复后完整 discover 通过”
+4. `docs/TD/2026-04-21-临时邮箱插件化TD.md`
+   - 顶部现状、测试现状与 M5 小结改为完整回归已通过
+
+**当前状态**：
+1. 插件化任务现已完成 M1、M2、M3、M4、M5。
+2. 当前工作树的最终回归基线：
+   - 插件化专项：`89/89 passed`
+   - 完整回归：`Ran 1332 tests in 352.180s`，`OK (skipped=7)`
+
+---
+
+#### 225. 临时邮箱 Provider 插件化 — 继续收口 TODO 文案与完成定义
+
+**时间**：2026-04-21
+
+**背景**：
+在完整回归已经拿到绿灯后，用户进一步要求“继续完善我们的 TODO，看一下具体情况内容”，并再次强调所有结果都要先充分获取上下文、同步相关文档与 `WORKSPACE.md`。重新通读 `docs/TODO/2026-04-21-临时邮箱插件化TODO.md` 后，发现虽然里程碑状态已经改为全绿，但仍残留少量进行时口径，不利于后续直接把 TODO 当作已完成任务单阅读。
+
+**本次修改**：
+1. `docs/TODO/2026-04-21-临时邮箱插件化TODO.md`
+   - 将 TDD 基线表中的“当前主要差异”改为“当前收口结论”，避免在任务已完成后继续保留“差异”语义
+   - 将 T1.5 中“现有测试全量回归不报错”补勾为已完成
+   - 将“## 5. 下一轮准备”改名为“## 5. 当前收口基线”，更符合当前任务已经完成的实际状态
+   - 在“## 7. 完成定义”下补充当前状态说明：上述 7 条已满足，本期插件化已完成
+
+**当前状态**：
+1. TODO 现在不仅反映“测试已通过”，也在文案层明确表达了“任务已收口完成”。
+2. 当前插件化相关主文档、测试结果与 `WORKSPACE.md` 记录已保持一致。
+
+---
+
+#### 227. 临时邮箱 Provider 插件化 — 重新核对实现状态并重跑专项/完整回归
+
+**时间**：2026-04-21
+
+**背景**：
+在插件化 TODO 已经完成收口后，用户继续要求：先汇报几个任务功能实现的现状，再直接检查文档并重新启动测试。为避免只凭上一轮结果复述，本轮先重新读取了关键实现文件，再重新执行插件专项和完整回归。
+
+**本次重新核对的实现现状**：
+1. `outlook_web/services/temp_mail_provider_base.py`
+   - `register_provider()`、`get_registry()` 与 `TempMailProviderBase` 的 provider 元信息类属性均已存在
+2. `outlook_web/services/temp_mail_provider_factory.py`
+   - `_BUILTIN_PROVIDERS`、`load_plugins()`、`reload_plugins()`、`get_available_providers()` 均已落地
+3. `outlook_web/services/temp_mail_plugin_manager.py`
+   - `install_plugin()`、`uninstall_plugin()`、配置 CRUD、`test_plugin_connection()` 均已落地
+4. `web_outlook_app.py`
+   - `install-provider` / `uninstall-provider` / `list-providers` 三个 CLI 入口已接入
+5. `static/js/features/plugins.js`
+   - `loadPlugins()`、`install()`、`uninstall()`、`testConnection()`、`applyChanges()`、`customInstall()`、`init()` 均已存在并启用
+6. 浏览器 unittest
+   - `tests/test_account_edit_browser_flow.py`
+   - `tests/test_csrf_browser_recovery.py`
+   - 当前均已改为面向 DOM 就绪的等待，不再依赖 `networkidle`
+
+**本次测试结果**：
+1. 插件化专项：
+   - `python -m unittest discover -s tests -p "test_temp_mail_plugin_*.py" -v`
+   - 结果：`Ran 89 tests in 1.826s`，`OK`
+2. 完整回归：
+   - `python -m unittest discover -s tests -v`
+   - 结果：`Ran 1332 tests in 369.705s`，`OK (skipped=7)`
+
+**本次文档更新**：
+1. `docs/TODO/2026-04-21-临时邮箱插件化TODO.md`
+   - 将完整回归时长从上一轮结果刷新为本轮最新值 `369.705s`
+2. `docs/FD/2026-04-21-临时邮箱插件化FD.md`
+   - 顶部当前实施状态中的完整回归结果刷新为本轮最新值
+3. `docs/TDD/2026-04-21-临时邮箱插件化TDD.md`
+   - 完整回归结果刷新为本轮最新值
+4. `docs/TD/2026-04-21-临时邮箱插件化TD.md`
+   - 顶部现状、测试现状与 M5 小结中的完整回归结果刷新为本轮最新值
+
+**当前状态**：
+1. 本轮已再次确认：插件化功能实现主链完整存在，且专项 + 完整回归均可重复跑通。
+2. 当前最新基线为：
+   - 插件化专项：`Ran 89 tests in 1.826s`，`OK`
+   - 完整回归：`Ran 1332 tests in 369.705s`，`OK (skipped=7)`
+
+---
+
+#### 228. 临时邮箱 Provider 插件化 — 启动可访问的人工验收实例
+
+**时间**：2026-04-21
+
+**背景**：
+在重新核对实现现状、并再次跑通专项与完整回归后，用户继续要求“启动一下人工来验收”。考虑到 detached 模式下 `python web_outlook_app.py` 在本环境里会 exit code 0 但不实际监听端口，本轮改用附着式长运行会话启动临时验收实例，并先自行验证可访问性，再把地址反馈给用户。
+
+**本次实际操作**：
+1. 先尝试 detached 启动：
+   - `HOST=127.0.0.1`
+   - `PORT=5098`
+   - `DATABASE_PATH=%TEMP%\\outlookEmail-manual-accept.db`
+   - 结果：进程退出后 5098 未监听，`/login` 返回 `502 Bad Gateway`
+2. 随后改为附着式异步会话启动：
+   - `HOST=127.0.0.1`
+   - `PORT=5097`
+   - `DATABASE_PATH=%TEMP%\\outlookEmail-manual-accept-live.db`
+   - `SCHEDULER_AUTOSTART=false`
+   - 使用临时登录口令 `admin12345`
+3. 实际验证：
+   - `Invoke-WebRequest http://127.0.0.1:5097/login` → `StatusCode = 200`
+   - `Get-NetTCPConnection -LocalPort 5097 -State Listen` → 监听存在
+
+**当前状态**：
+1. 当前已有一个可访问的临时人工验收实例运行在 `http://127.0.0.1:5097`。
+2. 该实例使用独立临时数据库，不影响现有数据。
+3. 若后续需要结束该实例，应在当前会话中显式停止 `manual-accept-live` 这个 PowerShell 会话。
+
+---
+
+#### 229. 临时邮箱 Provider 插件化 — 补充人工/模拟验收操作说明
+
+**时间**：2026-04-21
+
+**背景**：
+在人工验收实例已经启动可访问后，用户继续追问“我们现在该如何进行模拟测试、该怎么实际操作”。为避免这些关键信息只停留在对话里，本轮把可复用的手工验收思路同步回 TODO 和 `WORKSPACE.md`。
+
+**本次修改**：
+1. `docs/TODO/2026-04-21-临时邮箱插件化TODO.md`
+   - 在 `T4.4 前端手动验收` 的当前状态下新增“**可复用的人工/模拟验收路径**”
+   - 明确写出：
+     - 登录验收实例后进入 `设置 → 临时邮箱 → 插件管理`
+     - 基础交互先验证折叠态 / 展开态 / 刷新 / 应用变更
+     - 如需模拟“已安装 / 加载失败”，在 `<DATABASE_PATH 上级目录>\\plugins\\temp_mail_providers\\` 放置正常/故障插件文件后点击“应用变更”
+     - 如需模拟“安装 / 自定义安装”，通过 `registry.json` 或“自定义安装”URL 输入完成
+     - 如需模拟“配置 / 测试连接”，插件类需要提供 `config_schema` 与 `get_options()`
+
+**当前状态**：
+1. 现在只看 TODO 的 `T4.4` 小节，就能知道人工点验应该从哪里进、如何模拟不同状态。
+2. 当前人工验收实例仍运行在 `http://127.0.0.1:5097`，可继续配合上述步骤使用。
+
+---
+
+#### 230. 临时邮箱 Provider 插件化 — 真实人工模拟发现 load_failed 错误态未贯通
+
+**时间**：2026-04-21
+
+**背景**：
+在人工验收实例与模拟操作说明都准备好后，用户继续要求“你来帮助我来进行模拟一下，看看到底情况是怎么样的”。因此本轮没有停在说明层，而是直接在当前临时验收环境里放入示例插件、启动本地插件源、登录真实实例并逐条打插件 API，验证实际链路。
+
+**本次模拟准备**：
+1. 在 `%TEMP%\\plugins\\temp_mail_providers\\` 放入：
+   - `manual_mock_installed.py`（正常插件）
+   - `manual_mock_broken.py`（故障插件，导入缺失依赖）
+2. 在 `%TEMP%\\manual-plugin-feed\\` 放入：
+   - `manual_mock_available.py`（可安装插件）
+3. 在 `%TEMP%\\plugins\\registry.json` 写入 3 个插件条目
+4. 启动本地插件源：
+   - `python -m http.server 5096 --bind 127.0.0.1`
+
+**本次真实链路验证**：
+1. 已通过的真实链路：
+   - `GET /api/plugins/manual_mock_installed/config/schema` → 返回 schema
+   - `GET /api/plugins/manual_mock_installed/config` → 返回默认配置
+   - `POST /api/plugins/manual_mock_installed/config` → 保存成功
+   - `POST /api/plugins/manual_mock_installed/test-connection` → 返回“连接成功”
+   - `POST /api/plugins/install` 安装 `manual_mock_available` → 成功
+   - `POST /api/system/reload-plugins` → 成功加载 `manual_mock_available` 与 `manual_mock_installed`
+2. 发现的真实缺口：
+   - `POST /api/system/reload-plugins` 明确返回：
+     - `manual_mock_broken` in `failed`
+     - 错误：`ModuleNotFoundError: No module named 'definitely_missing_manual_plugin_dependency'`
+   - 但随后 `GET /api/plugins` 仍返回：
+     - `manual_mock_broken.status = "installed"`
+   - 结论：当前真实后端链路下，`load_failed` 没有被 `/api/plugins` 消费，前端无法真实显示“加载失败”错误态
+
+**本次文档更新**：
+1. `docs/TODO/2026-04-21-临时邮箱插件化TODO.md`
+   - 将 M4 从“已完成”调整为“主体已完成，但真实 `load_failed` 错误态仍待打通”
+   - 将 T4.4 的“错误态”验收项改回未完成，并补入真实人工模拟的结论
+   - 将“当前收口基线”改为“当前验证基线”
+   - 在完成定义中新增第 8 条：真实后端链路需把加载失败错误态展示到 UI
+2. `docs/FD/2026-04-21-临时邮箱插件化FD.md`
+   - 顶部当前实施状态补入：真实 `load_failed` 错误态尚未贯通
+3. `docs/TDD/2026-04-21-临时邮箱插件化TDD.md`
+   - 补入：自动化未覆盖的真实集成缺口
+4. `docs/TD/2026-04-21-临时邮箱插件化TD.md`
+   - 补入：`reload_plugins()` failed 结果未进入 `/api/plugins` 输出
+
+**当前状态**：
+1. 当前可以真实确认：安装、配置保存、测试连接、available → installed 主链都能跑通。
+2. 当前仍待修复：`load_failed` 错误态的真实后端到前端贯通。
+
+---
+
+#### 231. 临时邮箱 Provider 插件化 — 修复 load_failed 聚合并完成真实复测
+
+**时间**：2026-04-21
+
+**背景**：
+在 230 中已经确认真实缺口位于 `/api/plugins` 没有消费 `reload-plugins` 的 failed 结果，导致故障插件仍显示为 `installed`。本轮继续按真实链路收口，先修代码，再用同一套人工验收实例重新验证。
+
+**本次实现**：
+1. 修改 `outlook_web/services/temp_mail_provider_factory.py`
+   - 新增 `_PLUGIN_LOAD_STATE`
+   - 新增 `get_plugin_load_state()`
+   - `load_plugins()` 现在会持久化最近一次插件加载结果
+   - 对“同一故障文件未变化时跳过重复导入”的路径，保留上一次 failed 状态，供 API 聚合读取
+2. 修改 `outlook_web/controllers/plugins.py`
+   - `api_get_plugins()` 改为聚合：
+     - `get_available_plugins()`
+     - `get_installed_plugins()`
+     - `get_plugin_load_state()`
+   - 故障插件现在返回 `status = "load_failed"`，并附带 `error`
+   - `installed_count` 改为仅统计真实 `installed` 项
+3. 修改测试：
+   - `tests/test_temp_mail_plugin_api.py`
+     - 新增 `test_get_plugins_marks_load_failed_status`
+   - `tests/test_temp_mail_plugin_loader.py`
+     - 新增 `test_reload_retains_failed_plugin_state_for_api_consumption`
+     - 补齐插件测试目录的清理，避免残留文件污染后续用例
+
+**本次验证**：
+1. 自动化验证：
+   - `python -m pytest tests/test_temp_mail_plugin_loader.py tests/test_temp_mail_plugin_api.py -v --tb=short`
+   - 结果：`34 passed`
+2. 真实人工验收环境复测：
+   - 重启 `manual-accept-live`（`http://127.0.0.1:5097`）
+   - 继续复用 `manual-plugin-feed`（`http://127.0.0.1:5096`）
+   - 登录后先获取 `/api/csrf-token`
+   - 带 `X-CSRFToken` 调用 `POST /api/system/reload-plugins`
+   - 随后调用 `GET /api/plugins`
+   - 实际结果：
+     - `reload_failed_names = ["manual_mock_broken"]`
+     - `manual_mock_broken.status = "load_failed"`
+     - `manual_mock_broken.error` 含 `ModuleNotFoundError`
+     - `installed_count = 2`
+
+**本次文档同步**：
+1. `docs/TODO/2026-04-21-临时邮箱插件化TODO.md`
+   - M4 改回已完成
+   - T4.4 错误态改回已完成
+   - 完成定义改为 8 条均已满足
+2. `docs/FD/2026-04-21-临时邮箱插件化FD.md`
+   - 顶部状态改为真实后端闭环已完成
+3. `docs/TDD/2026-04-21-临时邮箱插件化TDD.md`
+   - 补入新增用例与真实复测结论
+4. `docs/TD/2026-04-21-临时邮箱插件化TD.md`
+   - 补入状态缓存与聚合修复口径
+
+**当前状态**：
+1. `load_failed` 错误态已完成真实后端到前端贯通。
+2. 插件化任务当前已重新回到“完成”状态。
+
+---
+
+#### 232. 临时邮箱 Provider 插件化 — 页面级点击验收确认 load_failed 错误卡片可见
+
+**时间**：2026-04-21
+
+**背景**：
+在 231 中已经完成 API 层与真实 HTTP 链路复测，但用户继续明确选择“继续做一次页面级点击验收”。因此本轮继续站在真实前端页面上操作，而不是停在接口层。
+
+**本次验收方式**：
+1. 继续复用：
+   - `manual-accept-live` → `http://127.0.0.1:5097`
+   - `manual-plugin-feed` → `http://127.0.0.1:5096`
+2. 使用 Playwright 对真实页面执行：
+   - 访问 `/login`
+   - 输入密码登录
+   - 点击左侧“设置”
+   - 切到“临时邮箱”Tab
+   - 展开“插件管理”卡片
+   - 真实点击“应用变更”
+3. 等待前端完成：
+   - `POST /api/system/reload-plugins`
+   - 随后重渲染插件列表
+
+**本次页面级结果**：
+1. `reload_failed_names = ["manual_mock_broken"]`
+2. 页面徽标：`已安装 2 个`
+3. `#plugin-item-manual_mock_broken` 卡片可见
+4. 卡片内可见：
+   - “加载失败”状态徽标
+   - `ModuleNotFoundError: No module named 'definitely_missing_manual_plugin_dependency'`
+5. 结论：真实用户在页面中点击“应用变更”后，已经能够直接看到 `load_failed` 错误卡片，不再需要只靠接口观察
+
+**本次文档同步**：
+1. `docs/TODO/2026-04-21-临时邮箱插件化TODO.md`
+   - 在 `T4.4` 下补入页面级点击验收结论
+   - 在 M4 当前状态中补入“真实 UI 已展示加载失败卡片”
+2. `docs/TDD/2026-04-21-临时邮箱插件化TDD.md`
+   - 补入页面级点击验收结论
+
+**当前状态**：
+1. 插件错误态已经完成 route mock、API 链路、真实 HTTP、真实页面点击四层验证。
+2. 当前 5097 / 5096 环境仍可继续复用。
+
+---
+
+#### 233. 临时邮箱 Provider 插件化 — 新增根目录接入说明与 Agent 接入提示词
+
+**时间**：2026-04-21
+
+**背景**：
+在插件化真实闭环已经完成后，用户继续要求基于“当前文档设计和项目内容”补两份新的接入资料：一份给人直接阅读的接入说明，一份给 Agent 直接执行代码实现的提示词；同时要求两份都放在 `docs/` 根目录，并补 README 入口。
+
+**本次文档新增**：
+1. `docs/临时邮箱Provider插件接入说明.md`
+   - 面向开发者
+   - 说明 Provider 插件接入目标、真实运行时路径、基类契约、`config_schema`、方法返回结构、registry 安装方式、推荐验收步骤与最小清单
+   - 明确当前真实路径口径是 `<DATABASE_PATH 上级目录>/plugins/...`
+2. `docs/临时邮箱Provider插件接入提示词.md`
+   - 面向 AI / Agent
+   - 给出可直接发送的接入提示词模板
+   - 明确边界：不要重做插件系统主干，而是在现有插件架构上新增 Provider
+   - 要求 Agent 先读接入说明与插件化主文档，再实现代码、测试与文档
+
+**本次 README 更新**：
+1. `README.md`
+   - 在“项目文档”章节新增：
+     - `docs/临时邮箱Provider插件接入说明.md`
+     - `docs/临时邮箱Provider插件接入提示词.md`
+   - 补充说明：新增 Provider 时优先阅读这两份文档
+
+**本次落盘策略**：
+1. 两份文档都放在 `docs/` 根目录（按用户要求）
+2. 没有沿用 `docs/DEV/`，也没有拆到 `docs/API/`
+
+**当前状态**：
+1. 现在仓库里已经同时具备：
+   - 面向人的 Provider 接入说明
+   - 面向 Agent 的 Provider 接入提示词
+2. README 也已经补上入口，不需要再靠会话记忆找文档。
+
+---
+
+#### 234. 临时邮箱 Provider 插件化 — 接入文档迁移到项目根目录并修正引用
+
+**时间**：2026-04-21
+
+**背景**：
+在 233 中已经按当时要求把两份接入文档落到 `docs/` 根目录，但用户随后进一步要求“放在我们的这个项目的根目录下面”，并继续要求把相关文档与 `WORKSPACE.md` 同步更新。因此本轮做的是路径迁移与引用修正，而不是重写内容。
+
+**本次迁移**：
+1. 将以下文件从 `docs/` 移动到项目根目录：
+   - `docs/临时邮箱Provider插件接入说明.md` → `临时邮箱Provider插件接入说明.md`
+   - `docs/临时邮箱Provider插件接入提示词.md` → `临时邮箱Provider插件接入提示词.md`
+2. 文档正文中的互相引用同步改为根目录路径：
+   - `临时邮箱Provider插件接入说明.md`
+   - `临时邮箱Provider插件接入提示词.md`
+
+**本次相关文档更新**：
+1. `README.md`
+   - “项目文档”章节中的两条入口改为根目录链接：
+     - `./临时邮箱Provider插件接入说明.md`
+     - `./临时邮箱Provider插件接入提示词.md`
+2. `WORKSPACE.md`
+   - 新增本条 234 号记录，说明这次路径迁移与引用修正
+
+**当前状态**：
+1. 两份接入文档现在都位于项目根目录。
+2. README 入口已同步到新路径。
+3. 文档正文互链已同步，不会再跳回旧的 `docs/` 路径。
+
+---
+
+#### 235. 临时邮箱 Provider 插件化 — 本地提交本轮改动（不推送）
+
+**时间**：2026-04-21
+
+**背景**：
+在插件化功能、真实验收闭环、接入文档与路径迁移都完成后，用户进一步要求“现在可以尝试一下本地提交一下，不要推送”。因此本轮目标是只在本地创建 commit，不执行任何 push。
+
+**本次提交范围原则**：
+1. 纳入本轮插件化相关代码、测试、README、接入文档与 `WORKSPACE.md`
+2. 不纳入明显不属于本轮范围的文件（如 `.github/copilot-instructions.md`）
+3. 只做本地 commit，不做远端推送
+
+**当前状态**：
+1. `WORKSPACE.md` 已补记本次本地提交动作。
+2. 下一步将按本轮插件化相关文件创建本地 commit。
+
+---
+
+
+**本次实现**：
+1. 新增 `outlook_web/services/temp_mail_plugin_cli.py`
+   - 实现 `main()`、`_cmd_install()`、`_cmd_uninstall()`、`_cmd_list()`、`_confirm()`
+   - 对接 `install_plugin()`、`uninstall_plugin()`、`check_provider_in_use()`、`get_available_providers()`、`get_installed_plugins()`
+2. 修改 `web_outlook_app.py`
+   - 在 `__main__` 中增加 `install-provider` / `uninstall-provider` / `list-providers` 分流
+3. 新增仓库根占位文件
+   - `plugins/registry.json`
+   - `plugins/temp_mail_providers/.gitkeep`
+4. 修正插件 API 鉴权兼容
+   - `login_required` 兼容 `session["logged_in"]` 与 `session["user_id"]`
+5. 修正插件管理服务
+   - `temp_mail_plugin_manager.py` 增加 registry 缓存降级、真实异常类捕获、配置默认值回读修正
+
+**本次测试结果**：
+- `tests/test_temp_mail_plugin_cli.py` → `6/6 passed`
+- `tests/test_temp_mail_plugin_api.py` → `19/19 passed`
+- `tests/test_temp_mail_plugin_manager.py` → `29/31 passed`
+  - 剩余失败：`D-INST-04`、`D-INST-09`
+
+**当前结论**：
+1. M3 CLI 已真实落地并通过专项测试。
+2. M2 API 契约已全绿。
+3. 当前主阻塞已收敛到插件管理服务安装路径的 2 个边界用例。
+4. 文档需要继续按这轮真实状态更新，避免仍然写成“CLI 未实现 / 占位未提交”。
+
+---
+
+#### 209. 临时邮箱 Provider 插件化 — 文档状态回填与 WORKSPACE 同步
+
+**时间**：2026-04-21
+
+**背景**：
+用户要求先充分获取上下文，再按当前仓库实际状态修正插件化会话文档，并把本轮操作持续记录到 `WORKSPACE.md`。
+
+**本次核对范围**：
+- 阅读：`docs/PRD/2026-04-21-临时邮箱插件化PRD.md`、`docs/FD/2026-04-21-临时邮箱插件化FD.md`、`docs/TD/2026-04-21-临时邮箱插件化TD.md`、`docs/TDD/2026-04-21-临时邮箱插件化TDD.md`、`docs/TODO/2026-04-21-临时邮箱插件化TODO.md`、`WORKSPACE.md`
+- 核对代码：`outlook_web/services/temp_mail_provider_base.py`、`outlook_web/services/temp_mail_provider_factory.py`、`outlook_web/services/temp_mail_provider_cf.py`、`outlook_web/services/temp_mail_provider_custom.py`、`outlook_web/repositories/settings.py`、`outlook_web/app.py`、`outlook_web/routes/system.py`、`outlook_web/routes/plugins.py`、`outlook_web/controllers/plugins.py`、`outlook_web/services/temp_mail_plugin_manager.py`、`web_outlook_app.py`、`docker-compose.yml`
+- 实际运行：`tests/test_temp_mail_plugin_registry.py`、`tests/test_temp_mail_plugin_factory.py`、`tests/test_temp_mail_plugin_loader.py`
+
+**核对结论**：
+1. M1 核心链路已在仓库落地，且层 A/B/C 共 27 个用例已实际通过。
+2. M2 后端主干已存在：`temp_mail_plugin_manager.py`、`routes/plugins.py`、`controllers/plugins.py`、`POST /api/system/reload-plugins`、`app.py` 中的插件加载与 Blueprint 注册均已接好。
+3. 当前主要缺口是 CLI：`outlook_web/services/temp_mail_plugin_cli.py` 不存在，`web_outlook_app.py` 也尚未接入子命令；仓库根 `plugins/registry.json` 与 `plugins/temp_mail_providers/.gitkeep` 也未提交。
+4. 当前实现里的插件目录实际以 `DATABASE_PATH` 上级目录为根，即 `<DATABASE_PATH 上级目录>/plugins/...`；这与早期文档中固定仓库根 `plugins/` 的表述不一致。
+
+**本次文档回填**：
+- 更新 `docs/PRD/2026-04-21-临时邮箱插件化PRD.md`：将“待开发”修正为“开发中”，补入后端主干已落地与实际插件目录口径。
+- 更新 `docs/FD/2026-04-21-临时邮箱插件化FD.md`：修正“待代码实现”表述，并标注已存在/待实现模块。
+- 更新 `docs/TD/2026-04-21-临时邮箱插件化TD.md`：将“当前技术现状”改为当前仓库实现状态说明，明确路径口径偏差。
+- 更新 `docs/TODO/2026-04-21-临时邮箱插件化TODO.md`：把初始基线与本轮核对结果分开记录，并将 A/B/C 已通过项勾选。
+- 更新 `docs/TDD/2026-04-21-临时邮箱插件化TDD.md`：补充本轮已跑通过的测试与尚未实现的 CLI 状态。
+
+**当前状态**：
+本轮仅执行文档与 `WORKSPACE.md` 同步，未继续推进 CLI、前端或插件占位文件创建。
+
+---
+
+#### 208. 临时邮箱 Provider 插件化 — PRD 评估与实施讨论
+
+**时间**：2026-04-21
+
+**背景**：
+用户提供了关于“临时邮箱 Provider 插件化”的 PRD (`docs/PRD/2026-04-21-临时邮箱插件化PRD.md`)，要求评估其具体表现和实现思路。
+
+**评估结论**：
+这份 PRD 内容表现非常务实和清晰，主要体现在以下几个方面：
+1. **切中要害**：准确抓住了 Docker 普通用户无法改代码、改镜像的痛点，给出了“一键安装、点按钮配参数”的产品方案。
+2. **架构克制**：在 v1 阶段不做复杂的权限沙箱隔离、不做文件自动热更新，而是让用户主动点击“刷新插件”，这极大降低了服务端状态混乱和崩溃的风险。
+3. **扩展性强**：基于 JSON Schema 动态生成配置表单，以及通过 `registry.json` 中心化管理，让插件开发者也有明确的规范可循。
+
+**具体实现思路（四步走）**：
+1. **底层机制改造 (Phase 1)**：把原来写死在 `factory.py` 里的 `if/elif` 改成动态注册表。提供一个 `@register_provider` 装饰器，并且在 Flask 启动时以及用户调用“刷新插件”接口时，使用 `importlib` 扫描 `plugins/temp_mail_providers/` 目录下的所有 Python 文件加载进内存。
+2. **插件生命周期 API (Phase 1-2)**：实现读取官方 `registry.json` 的列表接口；实现下载 `.py` 文件并保存到本地目录的安装接口；实现删除文件的卸载接口。
+3. **动态配置与存储 (Phase 2)**：读取插件类自带的 `config_schema`，让前端动态渲染输入框。所有配置以 `plugin.插件名.字段名` 为 Key 存在现有的 SQLite `settings` 表中。
+4. **前端对接 (Phase 2)**：在设置页增加“插件管理”面板，同时让现有的“临时邮箱”下拉选择框能够读到加载好的第三方插件并走一样的流程。
+
+**当前状态**：已完成 PRD 的阅读评估并在本地工作区记录，准备确认无误后进入具体开发阶段。
+
+---
+
 ## 2026-04-19
 
 ### 操作记录
