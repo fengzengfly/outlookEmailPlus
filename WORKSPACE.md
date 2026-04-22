@@ -4,6 +4,390 @@
 
 ---
 
+## 2026-04-22
+
+### 操作记录
+
+#### 228. Issue #52 renderEmailList 滚动位置重置（scrollTop=0）
+
+**时间**：2026-04-22
+
+**本次背景**：
+
+- 用户人工验收时发现：点击一个邮箱账号后刷新，邮件列表的滚动位置会"乱跑"，没有回到顶部。
+- 用户要求：点击账号后自动拉取邮件，刷新渲染后应自动回到列表最顶部。
+- 用户还提到第二个问题（与推送/刷新后列表项位置变化有关），尚未完全确认。
+
+**本次修改**：
+
+1. `static/js/features/emails.js` — `renderEmailList(emails)` → `renderEmailList(emails, options = {})`：
+   - 新增 `options.scrollToTop` 参数（默认 `true`）
+   - 在 innerHTML 渲染完成后，当 `scrollToTop !== false` 时执行 `container.scrollTop = 0`
+2. 不应滚动到顶部的调用点（已传入 `{ scrollToTop: false }`）：
+   - `toggleEmailSelection()` — 勾选/取消复选框
+   - `deleteEmails()` — 删除邮件
+   - `deleteCurrentTempEmailMessage()` — 删除临时邮件
+   - `loadMoreEmails()` — 滚动加载更多
+3. 应滚动到顶部的调用点（保持默认 `scrollToTop: true`）：
+   - `loadEmails()` 缓存路径（emails.js:49）
+   - `loadEmails()` API 成功路径（emails.js:105）
+   - `selectAccount()` 缓存路径（accounts.js:53）
+   - `switchFolder()` 缓存路径（main.js:1163）
+4. 契约测试通过
+5. 本地服务已重启：PID 12512，端口 5600
+
+**待用户确认**：
+
+- 滚动位置重置是否满足预期
+- 用户提到的"第二个问题"需进一步澄清
+
+#### 228a. 验收服务重启（PID 2392）
+
+**时间**：2026-04-22
+
+- 服务已重启：PID 2392，端口 5600
+- 用户正在进行人工验收（scrollTop 修复后）
+
+#### 228b. 用户确认验收通过 + 要求分析 main 分支合并
+
+**时间**：2026-04-22
+
+- 用户反馈"可以了"，验收通过
+- 用户要求分析 main 分支内容并尝试合并
+
+#### 229. Buggithubissue 与 main 分支合并分析
+
+**时间**：2026-04-22
+
+**分支状态**：
+
+- 当前分支：`Buggithubissue`
+- 共同祖先：`16e0635`（Merge branch 'main' into Buggithubissue）
+- main 领先 Buggithubissue 的提交：16 个
+- Buggithubissue 领先 main 的提交：0 个（但本地有未提交的修改）
+
+**main 领先的主要功能**：
+
+1. **临时邮箱插件化体系**（13 个提交，78 文件变动）：
+   - `plugins/` 目录（插件注册表 + 测试插件 + MoeMail 插件）
+   - `outlook_web/controllers/plugins.py`、`routes/plugins.py`
+   - `outlook_web/services/temp_mail_plugin_manager.py`、`temp_mail_plugin_cli.py`
+   - `outlook_web/services/temp_mail_provider_factory.py` 大幅重构
+   - `static/js/features/plugins.js`（前端插件管理界面）
+   - 13 个新测试文件
+
+2. **浏览器扩展增强**：
+   - `browser-extension/profile-generator.js`、`profile-data-us.js`
+   - Jest 测试（popup/storage/profile-generator）
+
+3. **CI/发布修复**：
+   - `fix(ci): 修复 isort + coverage + 插件测试文件泄漏`
+   - `fix(ci): migrate test_settings_dynamic_provider_names from pytest to unittest`
+   - `chore(release): prepare v2.2.0`
+
+4. **版本升级**：`v2.1.0` → `v2.2.0` → `v2.2.2`
+
+**与 Issue #52 修改的冲突分析**：
+
+- `static/js/main.js`：main 分支 +270 行（插件化相关），我们修改了 +37 行（排序 + scrollTop）
+  - 风险：**中** — 两个分支修改了同一文件，但改动的函数区域不同（我们改 loadMoreEmails/switchFolder，main 加了插件化代码）
+- `static/js/features/emails.js`：main 分支未修改，我们 +29 行
+  - 风险：**低**
+- `static/js/features/accounts.js`：main 分支未修改，我们 +7 行
+  - 风险：**低**
+- `tests/test_v190_frontend_contract.py`：main 分支未修改，我们 +27 行
+  - 风险：**低**
+- `WORKSPACE.md`：两个分支都有大量新增
+  - 风险：**高**（容易冲突但不影响功能）
+
+**合并建议**：
+
+1. 先提交 Buggithubissue 分支的本地修改
+2. 然后执行 `git merge origin/main` 合入 main 的插件化代码
+3. 预期冲突主要在 `WORKSPACE.md`，手动解决即可
+4. 合并后执行全量回归确认无破坏
+
+#### 228. Issue #52 renderEmailList 滚动位置重置（scrollTop=0）
+
+**时间**：2026-04-22
+
+**本次背景**：
+
+- 用户要求重新分析前端渲染逻辑链路，确认排序修复是否覆盖所有路径。
+- 我完整读取了 emails.js / main.js / accounts.js 的渲染链路，发现 `selectAccount()` 中缓存命中路径直接赋值 `cache.emails`，没有走 `sortEmailsByNewestFirst` 排序。
+- 虽然 `selectAccount` 之后会立即调用 `loadEmails`（后者会再次命中缓存并排序），但中间存在一次无意义的未排序渲染。
+
+**本次修改**：
+
+1. `static/js/features/accounts.js:37-49`：
+   - `currentEmails = cache.emails` → `currentEmails = sortEmailsByNewestFirst(cache.emails || [])`（带 typeof 守卫）
+   - 新增 `cache.emails = currentEmails` 回写（与 emails.js/main.js 一致）
+2. `tests/test_v190_frontend_contract.py`：
+   - 在 `test_frontend_email_list_sorting_fallback_is_present_on_all_key_paths` 中新增断言：
+   - 验证 accounts.js 缓存命中路径包含 `? sortEmailsByNewestFirst(cache.emails || [])`
+3. 执行契约测试：`OK`
+4. 重启本地验收服务：PID 25588，端口 5600 已确认监听
+
+**排序覆盖情况（修复后）**：
+
+| 入口 | 缓存命中路径 | API 获取路径 |
+|------|-------------|-------------|
+| `loadEmails()` | ✅ 已排序 | ✅ 已排序 |
+| `loadMoreEmails()` | N/A | ✅ 已排序（合并后） |
+| `switchFolder()` | ✅ 已排序 | N/A |
+| `selectAccount()` | ✅ 已排序（本次修复） | ✅ 间接排序 |
+| `deleteEmails()` 后 | ✅ 从 currentEmails 过滤 | N/A |
+| `deleteCurrentTempEmailMessage()` 后 | ✅ 从 currentEmails 过滤 | N/A |
+
+**当前状态**：
+
+- 所有缓存命中路径已统一走排序兜底
+- 本地验收服务已重启：`http://127.0.0.1:5600`（PID 25588）
+- 用户正在进行人工验收
+
+#### 226. Issue #52 分批全量回归执行完成（6 批 + 余量核对）
+
+**时间**：2026-04-22
+
+**本次背景**：
+
+- 用户要求继续推进“全量回归”，并明确一个命令跑不完，需要分批执行。
+- 已先完成上下文获取：读取 `tests/` 用例列表、统计剩余模块、按功能域拆分批次。
+
+**分批执行结果**：
+
+1. Batch 1（前端契约/响应式/设置前端）
+   - 命令：`python -m unittest -v <11 modules>`
+   - 结果：`Ran 128 tests`，`OK`
+2. Batch 2（核心后端/迁移/安全/OAuth）
+   - 命令：`python -m unittest -v <24 modules>`
+   - 结果：`Ran 251 tests`，`OK`
+3. Batch 3（external + verification + notification）
+   - 命令：`python -m unittest -v <23 modules>`
+   - 结果：`Ran 393 tests`，`OK`
+4. Batch 4（IMAP + settings backend + account）
+   - 命令：`python -m unittest -v <25 modules>`
+   - 结果：`Ran 149 tests`，`OK`
+5. Batch 5（pool + temp-mail）
+   - 命令：`python -m unittest -v <20 modules>`
+   - 结果：`Ran 223 tests`，`OK (skipped=1)`
+6. Batch 6（overview + version/system + smoke）
+   - 命令：`python -m unittest -v <8 modules>`
+   - 结果：`Ran 113 tests`，`OK (skipped=6)`
+
+**余量核对**：
+
+- 通过脚本计算剩余模块，仅余 `tests.test_frontend_manual`
+- 单独执行结果：`Ran 0 tests`，`NO TESTS RAN`（该模块无 unittest 用例）
+
+**文档同步更新**：
+
+- `docs/TODO/2026-04-22-Issue52-前端邮件列表顺序修复TODO.md`
+  - Task 4/6 完成，Task 7 更新为文档已回写（待 PR 说明）
+- `docs/BUG/2026-04-22-Issue52-邮件列表倒序与验证码提取失败分析.md`
+  - 补充分批回归明细与通过结论
+- `session/files/issue52-pr-analysis-prompt.md`
+  - 新增“分批全量回归结果”章节
+
+**当前状态**：
+
+- Issue #52（前端顺序修复）代码 + 测试 + 文档已基本收口
+- 下一步可直接整理 PR 文案并进入提交流程
+
+#### 225. Issue #52 前端排序契约测试补充 + 定向验证通过
+
+**时间**：2026-04-22
+
+**本次背景**：
+
+- 在前端排序兜底实现完成后，继续推进 Task 5（前端契约测试补充）。
+
+**本次修改**：
+
+1. 更新 `tests/test_v190_frontend_contract.py`，新增：
+   - `test_frontend_email_list_sorting_fallback_is_present_on_all_key_paths`
+2. 新增断言覆盖点：
+   - `emails.js` 存在 `resolveEmailSortTimestamp` / `sortEmailsByNewestFirst`
+   - 时间字段 fallback 链：`receivedDateTime/date/created_at/received_at`
+   - 稳定排序规则：时间降序 + 原始索引升序
+   - `window.sortEmailsByNewestFirst` 暴露
+   - 关键路径调用：`loadEmails`（fetch + cache）/ `loadMoreEmails`（merge）/ `switchFolder`（cache）
+3. 执行定向测试：
+   - `python -m unittest tests.test_v190_frontend_contract.V190FrontendContractTests.test_frontend_email_list_sorting_fallback_is_present_on_all_key_paths -v`
+   - 结果：`OK`
+
+**同步文档**：
+
+- `docs/TODO/2026-04-22-Issue52-前端邮件列表顺序修复TODO.md`
+  - Task 2/3/5 标记为已完成，阶段更新为“待全量回归”
+- `docs/BUG/2026-04-22-Issue52-邮件列表倒序与验证码提取失败分析.md`
+  - 更新当前状态为“核心代码已落地 + 契约测试已补充”
+- `session/files/issue52-pr-analysis-prompt.md`
+  - 增补当前会话进展与下一步执行建议
+
+**当前状态**：
+
+- Issue #52 前端修复进入收尾阶段：
+  - 代码：已完成
+  - 定向契约测试：通过
+  - 待办：执行全量回归并整理 PR 描述
+
+#### 221. Issue #52 读取与前端逻辑切换方案分析（仅文档阶段）
+
+**时间**：2026-04-22
+
+**本次背景**：
+
+- 用户要求先读取并分析 GitHub Issue：`https://github.com/ZeroPointSix/outlookEmailPlus/issues/52`
+- 诉求关键词：
+  - 邮件列表变成倒序
+  - 获取验证码失败
+  - 按 PR 流程先做分析，再确认如何切换前端逻辑
+
+**已完成上下文采集（未改业务代码）**：
+
+1. 读取 Issue #52 原文（`gh issue view 52`）并确认当前信息较少，仅有现象描述。
+2. 追踪主链路代码：
+   - 前端：`static/js/features/emails.js`、`static/js/features/groups.js`、`static/js/main.js`
+   - 后端列表：`outlook_web/controllers/emails.py`、`outlook_web/services/graph.py`、`outlook_web/services/imap.py`、`outlook_web/services/imap_generic.py`
+   - 验证码提取：`outlook_web/services/external_api.py`、`outlook_web/services/verification_channel_routing.py`
+3. 核对近期历史提交，确认验证码提取链路在最近版本经历过“统一提取入口/渠道记忆/兼容语义修复”等演进。
+
+**当前分析结论（文档口径）**：
+
+- 邮件列表“顺序异常”与“验证码提取失败”很可能是**同一根因链路上的双症状**：
+  - 列表顺序如果与“最新优先”不一致，会影响“取最新邮件后提取验证码”的命中率。
+  - 验证码链路内部已存在按时间取 latest 的逻辑，但不同渠道（Graph/IMAP/IMAP Generic）时间字段格式与稳定性存在差异，可能导致 latest 选择偏差。
+- 前端当前未做统一的“时间戳归一 + 最新优先二次兜底排序”，主要依赖后端返回顺序。
+
+**拟定可执行方案（待用户拍板）**：
+
+1. 方案 A（推荐）：先修后端验证码提取 latest 选择策略 + 补测试，前端列表不做行为变更。
+2. 方案 B：后端修复 + 前端增加“最新优先”显示兜底排序（保持交互不变）。
+3. 方案 C：只做前端顺序切换（临时止血，不推荐长期使用）。
+
+**本次产出（仅文档）**：
+
+| 文件 | 类型 | 说明 |
+|------|------|------|
+| `docs/BUG/2026-04-22-Issue52-邮件列表倒序与验证码提取失败分析.md` | 新增 | Issue #52 分析、影响范围、方案 A/B/C、PR 实施与测试计划 |
+| `session/files/issue52-pr-analysis-prompt.md` | 新增 | 会话执行提示词（先上下文→再实现→再测试→再 PR 描述） |
+| `WORKSPACE.md` | 更新 | 记录本次分析与文档落地过程 |
+
+**当前状态**：
+
+- 仍处于“分析与文档阶段”，**尚未修改业务代码/测试代码**。
+- 下一步需用户确认采用 A/B/C 哪个方案后再进入实现与测试。
+
+---
+
+#### 222. Issue #52 设计深度补充 + TODO 文档编写（按 BUG 文档落地）
+
+**时间**：2026-04-22
+
+**本次背景**：
+
+- 用户要求先输出“打算如何设计”的深度分析，再根据 BUG 文档编写 TODO，随后再进入其他任务。
+- 用户强调：先充分获取上下文，再行动；并同步会话文档与 WORKSPACE。
+
+**已执行动作（文档层）**：
+
+1. 复读并核对当前 Issue #52 BUG 文档、历史 TODO 模板、WORKSPACE 当前记录。
+2. 对 BUG 文档补充“设计深度分析”章节，明确：
+   - 三层链路（读取层/选择层/展示层）
+   - 失败机理矩阵
+   - 修复设计原则与实施边界
+   - 建议实施顺序
+3. 新建 Issue #52 专用 TODO 文档，形成可执行任务分解（Task 1~7）并内置 A/B/C 方案分叉。
+
+**本次新增/更新文件**：
+
+| 文件 | 操作 | 说明 |
+|------|------|------|
+| `docs/BUG/2026-04-22-Issue52-邮件列表倒序与验证码提取失败分析.md` | 更新 | 新增“设计深度分析（用于实施前对齐）”章节 |
+| `docs/TODO/2026-04-22-Issue52-邮件列表顺序与验证码提取修复TODO.md` | 新增 | Issue #52 修复任务拆解、方案分叉、测试与回写路径 |
+| `WORKSPACE.md` | 更新 | 记录本次设计与 TODO 落地过程 |
+
+**当前状态**：
+
+- 仍未修改业务代码与测试逻辑。
+- 已完成“分析深度 + TODO 拆解”阶段。
+- 下一步等待用户拍板（A/B/C），再进入实现与测试。
+
+---
+
+#### 223. Issue #52 范围收敛：按用户口径改为“前端顺序优先”，并同步文档
+
+**时间**：2026-04-22
+
+**用户澄清**：
+
+- 用户明确指出：当前重点是前端问题，尤其是邮件列表顺序逻辑。
+- 对“验证码提取命中错误邮件”不作为本轮已确认问题。
+
+**本次文档调整（按实际口径修正）**：
+
+1. `docs/BUG/2026-04-22-Issue52-邮件列表倒序与验证码提取失败分析.md`
+   - 重写为“当前聚焦前端”版本：
+     - 明确本轮主目标是前端顺序一致性
+     - 后端提取链路仅保留背景说明
+2. `docs/TODO/2026-04-22-Issue52-前端邮件列表顺序修复TODO.md`
+   - 新建前端优先 TODO（Task 1~7）
+   - 聚焦 `emails.js/main.js` 排序 helper 与关键路径接入
+3. `session/files/issue52-pr-analysis-prompt.md`
+   - 更新为“前端优先”执行提示词
+   - PR 标题、Summary、验证范围改为前端排序修复口径
+
+**文件变更说明**：
+
+- 删除旧 TODO 文件：`docs/TODO/2026-04-22-Issue52-邮件列表顺序与验证码提取修复TODO.md`
+- 新增替代 TODO 文件：`docs/TODO/2026-04-22-Issue52-前端邮件列表顺序修复TODO.md`
+
+**当前状态**：
+
+- 已完成“会话口径纠偏”与文档对齐。
+- 仍未进入业务代码修改。
+- 下一步按前端 TODO 执行实现与测试。
+
+---
+
+#### 224. Issue #52 新逻辑说明补充（前端排序兜底）并同步到文档
+
+**时间**：2026-04-22
+
+**本次背景**：
+
+- 用户要求“介绍新的逻辑是什么”，并继续要求同步会话文档与 WORKSPACE。
+
+**本次动作**：
+
+1. 在 BUG 文档中补充“新逻辑设计（前端排序兜底）”：
+   - 时间字段读取顺序
+   - 时间解析与稳定排序规则
+   - 接入点（首次加载/缓存恢复/加载更多）
+   - 兼容约束与风险控制
+2. 在 TODO 文档中把新逻辑拆解到可执行子任务：
+   - helper 设计
+   - 关键路径接入
+   - 契约测试建议文件
+3. 在会话 prompt 文档中同步“当前口径新逻辑”章节，保证后续执行一致。
+
+**本次更新文件**：
+
+| 文件 | 操作 | 说明 |
+|------|------|------|
+| `docs/BUG/2026-04-22-Issue52-邮件列表倒序与验证码提取失败分析.md` | 更新 | 补充 6.1 新逻辑说明 |
+| `docs/TODO/2026-04-22-Issue52-前端邮件列表顺序修复TODO.md` | 更新 | 任务细化到 helper/接入点/测试文件 |
+| `session/files/issue52-pr-analysis-prompt.md` | 更新 | 增加 2.1 新逻辑章节 |
+| `WORKSPACE.md` | 更新 | 记录本次动作 |
+
+**当前状态**：
+
+- 文档层面对“新逻辑是什么”已完整说明。
+- 业务代码仍未改动，待进入实现阶段。
+
+---
+
 ## 2026-04-21
 
 ### 操作记录
@@ -185,6 +569,56 @@ fix: 修复标准模式小窗 UI 排版错乱（Issue #50）- 响应式断点适
 - `tests/test_responsive_detail_focus_contract.py` — 契约测试
 
 **排除**：`session/` 临时文件、`test_output.log`、`server_*.log`
+
+---
+
+#### 218. 合并 main → Buggithubissue — README 更新同步
+
+**时间**：2026-04-21
+
+**操作**：`git merge main --no-edit`
+**结果**：自动合并成功，无冲突
+
+**合并内容**：
+- `5d523a8` Update README.md
+- `54817cd` Add external link section in README
+
+**当前分支状态**：
+- 分支：`Buggithubissue`
+- 领先 `origin/Buggithubissue` 4 个 commit
+- 已包含 main 最新代码
+
+---
+
+#### 219. 合并后全量回归测试 — 全绿
+
+**时间**：2026-04-21
+
+**命令**：`python -m unittest discover -s tests -v`
+
+**结果**：
+- Ran **1256** tests in 384.231s
+- **OK (skipped=7)** ✅
+
+**备注**：合并 main 后新增 13 个测试（1256 vs 1243），全部通过。
+
+---
+
+#### 220. 推送 + 合并到 main + 推送 main + 全量测试
+
+**时间**：2026-04-21
+
+**操作链**：
+1. `git push origin Buggithubissue` — 推送修复分支到远端 ✅
+2. 在 main 工作树 `git merge Buggithubissue` — Fast-forward 合并 ✅（无冲突）
+3. `git push origin main` — 推送 main 到远端 ✅
+4. 在 main 工作树运行全量回归测试
+
+**全量测试结果（main 分支）**：
+- Ran **1256** tests in 384.687s
+- **OK (skipped=7)** ✅
+
+**结论**：修复代码已合并到 main，全量测试通过，远端已同步。
 
 ---
 
