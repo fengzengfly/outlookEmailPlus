@@ -167,8 +167,16 @@ v2.2.1 推送后 CI 仍未通过，需进一步修复。
 **重新发布**：
 - Commit：`792b663` — `fix(ci): 修复 isort + coverage + 插件测试文件泄漏`
 - Tag：`v2.2.2`（已推送至 origin）
-- GitHub Release：`https://github.com/ZeroPointSix/outlookEmailPlus/releases/tag/v2.2.2`
+- GitHub Release：`https://github.com/ZeroPoint.Six/outlookEmailPlus/releases/tag/v2.2.2`
   - 产物已上传
+
+**CI 最终结果（v2.2.2）**：
+- `Python Tests`（run `#24758092980`）✅ 成功 — `2m51s`
+- `Code Quality`（run `#24758092984`）✅ 成功 — `31s`
+- `Build and Push Docker Image`（main `#24758092981` / tag `#24758092978`）✅ 成功 — `4m0s`
+- `Create GitHub Release`（run `#24758092979`）✅ 成功 — `13s`
+- `SonarCloud Scan`（run `#24758092975`）✅ 成功 — `4m13s`
+- **结论**：v2.2.2 全部 CI 链路已恢复绿色，Docker 镜像已成功构建并推送
 
 ---
 
