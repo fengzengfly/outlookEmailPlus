@@ -1,3 +1,34 @@
+<!-- 插件自定义安装模态框 -->
+    <div class="modal" id="pluginCustomInstallModal"
+         onclick="if(event.target===this) PluginManager.closeCustomInstallModal()"
+         style="display:none;position:fixed;inset:0;background:rgba(44,24,16,0.45);backdrop-filter:blur(4px);z-index:1000;align-items:center;justify-content:center;">
+        <div class="modal-content" style="max-width:480px;width:90%;animation:fadeSlideDown 0.22s ease;">
+            <div class="modal-header">
+                <h3>自定义安装插件</h3>
+                <button class="modal-close" onclick="PluginManager.closeCustomInstallModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">插件名称 <span style="color:var(--clr-danger);">*</span></label>
+                    <input type="text" class="form-input" id="customPluginName" placeholder="例如：moemail">
+                    <div class="form-hint">将作为插件文件名（.py）和 provider 名称，建议使用小写字母+下划线。</div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">下载地址 <span style="color:var(--clr-danger);">*</span></label>
+                    <input type="url" class="form-input" id="customPluginUrl" placeholder="https://raw.githubusercontent.com/xxx/plugin.py">
+                    <div class="form-hint">粘贴插件 .py 文件的原始下载地址（GitHub raw / Gitee / 自建服务器）。</div>
+                </div>
+                <div style="padding:0.7rem 0.9rem;background:rgba(192,57,43,0.05);border:1px solid rgba(192,57,43,0.2);border-radius:6px;font-size:0.78rem;color:var(--clr-danger);">
+                    ⚠️ 插件代码将直接在服务器上执行，请仅安装来自可信来源的插件。
+                </div>
+            </div>
+            <div class="modal-footer" style="display:flex;justify-content:flex-end;gap:0.5rem;">
+                <button class="btn btn-sm" onclick="PluginManager.closeCustomInstallModal()">取消</button>
+                <button class="btn btn-sm btn-primary" onclick="PluginManager.customInstall()">安装</button>
+            </div>
+        </div>
+    </div>
+
 <!-- 添加分组模态框 -->
     <div class="modal" id="addGroupModal" onclick="if(event.target === this) hideAddGroupModal()">
         <div class="modal-content">
@@ -339,6 +370,9 @@
                     <button class="btn btn-secondary" onclick="loadRefreshLogs()">
                         📋 刷新历史
                     </button>
+                    <button class="btn btn-secondary" onclick="loadInvalidTokenGovernanceCandidates({keepVisibleWhenEmpty: true, silentWhenEmpty: false})">
+                        🔍 失效治理
+                    </button>
                 </div>
 
                 <!-- 刷新进度 -->
@@ -374,6 +408,46 @@
                     <div id="refreshLogsList"
                         style="max-height: 400px; overflow-y: auto; border: 1px solid #e5e5e5; border-radius: 6px; background-color: white;">
                         <!-- 刷新历史将通过 JS 动态加载 -->
+                    </div>
+                </div>
+
+                <!-- 失效 Token 治理面板 -->
+                <div id="invalidTokenGovernanceContainer" style="display: none;">
+                    <!-- 检测摘要 -->
+                    <div id="invalidTokenSummary"
+                        style="display: none; background-color: #fff3cd; padding: 14px; border-radius: 6px; margin-bottom: 14px; border-left: 4px solid #f59e0b;">
+                        <div style="font-size: 14px; font-weight: 600; color: #92400e; margin-bottom: 8px;">
+                            <span>⚠️</span>
+                            <span id="invalidTokenSummaryText"></span>
+                        </div>
+                        <div style="font-size: 12px; color: #92400e; margin-bottom: 10px;">
+                            检测到疑似失效 Token 错误（invalid_grant / AADSTS70000）。建议先将这些账号置为“停用”，避免继续使用。
+                        </div>
+                        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                            <button class="btn btn-sm btn-primary" onclick="batchSetInvalidTokenInactive()">
+                                批量置为停用
+                            </button>
+                            <button class="btn btn-sm btn-danger" onclick="batchDeleteInvalidTokenCandidates()">
+                                批量删除
+                            </button>
+                            <button class="btn btn-sm btn-secondary" onclick="hideInvalidTokenGovernance()">
+                                忽略
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- 候选列表 -->
+                    <div id="invalidTokenCandidateListWrap"
+                        style="display: none; border: 1px solid #e5e5e5; border-radius: 6px; overflow: hidden;">
+                        <div
+                            style="background-color: #f8f9fa; padding: 10px 12px; font-size: 13px; font-weight: 600; display: flex; justify-content: space-between; align-items: center;">
+                            <span>失效 Token 候选账号</span>
+                            <span id="invalidTokenCandidateCount" style="color: #666; font-weight: 500;">0 个</span>
+                        </div>
+                        <div id="invalidTokenCandidateList"
+                            style="max-height: 300px; overflow-y: auto; background-color: white;">
+                            <!-- 候选列表通过 JS 动态加载 -->
+                        </div>
                     </div>
                 </div>
             </div>

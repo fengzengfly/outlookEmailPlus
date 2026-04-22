@@ -239,10 +239,18 @@ class AccountEditBrowserFlowTests(unittest.TestCase):
             page.goto(f"{self.base_url}/login")
             page.fill("#password", "testpass123")
             page.click("#loginBtn")
-            page.wait_for_url(re.compile(r".*/$"))
-            page.wait_for_load_state("networkidle")
+            page.wait_for_url(re.compile(r".*/$"), timeout=60_000)
+            page.locator("#app").wait_for(timeout=15_000)
             page.locator('.nav-item[data-page="mailbox"]').click()
-            page.wait_for_load_state("networkidle")
+            # mailbox 页面会在切页后继续异步拉 groups / accounts / settings / version-check；
+            # 这里等待“页面可操作”而不是 networkidle，避免在全量 discover 中被后台请求拖慢或卡住。
+            page.wait_for_function(
+                """() => {
+                    const mailboxPage = document.getElementById('page-mailbox');
+                    return mailboxPage && !mailboxPage.classList.contains('page-hidden');
+                }""",
+                timeout=15_000,
+            )
 
             account_card = page.locator(".account-card").filter(has_text=account["email"]).first
             account_card.wait_for(timeout=10000)

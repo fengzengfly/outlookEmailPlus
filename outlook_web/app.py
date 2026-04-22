@@ -42,6 +42,7 @@ def create_app(*, autostart_scheduler: Optional[bool] = None):
             groups,
             overview,
             pages,
+            plugins,
             scheduler,
             settings,
             system,
@@ -71,6 +72,13 @@ def create_app(*, autostart_scheduler: Optional[bool] = None):
 
         # 初始化数据库
         init_db()
+
+        # 插件目录与第三方 provider 加载（不影响内置 provider）
+        plugins_dir = Path(config.get_database_path()).resolve().parent / "plugins" / "temp_mail_providers"
+        plugins_dir.mkdir(parents=True, exist_ok=True)
+        from outlook_web.services.temp_mail_provider_factory import load_plugins
+
+        load_plugins()
 
         app = Flask(
             __name__,
@@ -109,6 +117,7 @@ def create_app(*, autostart_scheduler: Optional[bool] = None):
             }
 
         app.secret_key = config.require_secret_key()
+        app.config["DATABASE_PATH"] = config.get_database_path()
         app.config["PERMANENT_SESSION_LIFETIME"] = 60 * 60 * 24 * 7  # 7 天
         app.config["SESSION_COOKIE_HTTPONLY"] = True
         app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
@@ -172,6 +181,7 @@ def create_app(*, autostart_scheduler: Optional[bool] = None):
         app.register_blueprint(emails.create_blueprint())
         app.register_blueprint(temp_emails.create_blueprint(csrf_exempt=csrf_exempt))
         app.register_blueprint(settings.create_blueprint())
+        app.register_blueprint(plugins.create_blueprint(csrf_exempt=csrf_exempt))
         app.register_blueprint(scheduler.create_blueprint())
         app.register_blueprint(system.create_blueprint())
         app.register_blueprint(audit.create_blueprint())

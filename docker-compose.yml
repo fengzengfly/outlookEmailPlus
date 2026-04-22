@@ -41,6 +41,7 @@ services:
     volumes:
       - ./data:/app/data
       - ./.runtime:/app/.runtime
+      - ./plugins:/app/plugins
       # Docker socket 挂载（可选，仅用于 Docker API 自更新功能）
       # ⚠️ 警告：挂载 docker.sock 会授予容器完全的 Docker API 访问权限，请谨慎使用
       # - /var/run/docker.sock:/var/run/docker.sock

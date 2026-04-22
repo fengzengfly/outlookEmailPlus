@@ -5,7 +5,7 @@ from typing import Any
 
 from outlook_web.repositories import settings as settings_repo
 from outlook_web.services import gptmail
-from outlook_web.services.temp_mail_provider_base import TempMailProviderBase
+from outlook_web.services.temp_mail_provider_base import TempMailProviderBase, register_provider
 
 DEFAULT_PREFIX_RULES = {
     "min_length": 1,
@@ -79,7 +79,13 @@ def _normalize_domain_entries(raw_domains: Any, default_domain: str) -> list[dic
     return domains
 
 
+@register_provider
 class CustomTempMailProvider(TempMailProviderBase):
+    provider_name = "custom_domain_temp_mail"
+    provider_label = "通用 API (GPTMail)"
+    provider_version = "1.0.0"
+    provider_author = "OutlookMail Plus"
+
     def __init__(self, *, provider_name: str | None = None):
         self.provider_name = settings_repo.get_temp_mail_runtime_provider_name(provider_name)
 
@@ -215,3 +221,13 @@ class CustomTempMailProvider(TempMailProviderBase):
     def clear_messages(self, mailbox: dict[str, Any] | str) -> bool:
         email_addr = self._coerce_email(mailbox)
         return gptmail.clear_temp_emails_from_api(email_addr)
+
+
+@register_provider
+class LegacyBridgeTempMailProvider(CustomTempMailProvider):
+    """兼容历史 provider 名称 legacy_bridge。"""
+
+    provider_name = "legacy_bridge"
+    provider_label = "Legacy Bridge (GPTMail)"
+    provider_version = "1.0.0"
+    provider_author = "OutlookMail Plus"
