@@ -109,7 +109,7 @@ class TestPluginAPI(unittest.TestCase):
                 del sys.modules[key]
         factory._FAILED_PLUGIN_MTIMES.clear()
         factory._PLUGIN_LOAD_STATE.clear()
-        for f in self._tmp_dir.glob("mock_*.py"):
+        for f in self._tmp_dir.glob("*.py"):
             f.unlink(missing_ok=True)
         if self._registry_file.exists():
             self._registry_file.unlink()

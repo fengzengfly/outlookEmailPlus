@@ -39,8 +39,8 @@ class TestGetSupportedTempMailProviderNames(_RegistryTestCase):
 
     def test_returns_empty_set_when_registry_is_empty(self):
         """注册表为空时，函数应返回空集合。"""
-        from outlook_web.temp_mail_registry import _REGISTRY
         from outlook_web.repositories.settings import get_supported_temp_mail_provider_names
+        from outlook_web.temp_mail_registry import _REGISTRY
 
         _REGISTRY.clear()
         result = get_supported_temp_mail_provider_names()
@@ -55,8 +55,8 @@ class TestGetSupportedTempMailProviderNames(_RegistryTestCase):
 
     def test_includes_dynamically_added_plugin_provider(self):
         """动态添加插件 provider 后，函数应包含新增名称。"""
-        from outlook_web.temp_mail_registry import _REGISTRY
         from outlook_web.repositories.settings import get_supported_temp_mail_provider_names
+        from outlook_web.temp_mail_registry import _REGISTRY
 
         _REGISTRY["my_plugin_provider"] = type("Plugin", (), {})
 
@@ -66,8 +66,8 @@ class TestGetSupportedTempMailProviderNames(_RegistryTestCase):
 
     def test_returns_copy_not_reference(self):
         """返回值应为注册表键的副本，修改返回值不影响注册表。"""
-        from outlook_web.temp_mail_registry import _REGISTRY
         from outlook_web.repositories.settings import get_supported_temp_mail_provider_names
+        from outlook_web.temp_mail_registry import _REGISTRY
 
         result = get_supported_temp_mail_provider_names()
         result.add("fake_provider")
@@ -75,8 +75,8 @@ class TestGetSupportedTempMailProviderNames(_RegistryTestCase):
 
     def test_reflects_registry_removal(self):
         """从注册表中移除 provider 后，函数不再包含该名称。"""
-        from outlook_web.temp_mail_registry import _REGISTRY
         from outlook_web.repositories.settings import get_supported_temp_mail_provider_names
+        from outlook_web.temp_mail_registry import _REGISTRY
 
         del _REGISTRY["cloudflare_temp_mail"]
 
@@ -106,16 +106,16 @@ class TestIsSupportedTempMailProviderName(_RegistryTestCase):
 
     def test_returns_false_when_registry_is_empty(self):
         """注册表为空时，任何名称都应返回 False。"""
-        from outlook_web.temp_mail_registry import _REGISTRY
         from outlook_web.repositories.settings import is_supported_temp_mail_provider_name
+        from outlook_web.temp_mail_registry import _REGISTRY
 
         _REGISTRY.clear()
         self.assertFalse(is_supported_temp_mail_provider_name("any_provider"))
 
     def test_returns_true_for_newly_added_plugin(self):
         """动态添加插件 provider 后，is_supported 应识别新名称。"""
-        from outlook_web.temp_mail_registry import _REGISTRY
         from outlook_web.repositories.settings import is_supported_temp_mail_provider_name
+        from outlook_web.temp_mail_registry import _REGISTRY
 
         _REGISTRY["new_plugin"] = type("New", (), {})
 
@@ -123,8 +123,8 @@ class TestIsSupportedTempMailProviderName(_RegistryTestCase):
 
     def test_returns_false_after_provider_removed(self):
         """provider 被移除后，is_supported 应返回 False。"""
-        from outlook_web.temp_mail_registry import _REGISTRY
         from outlook_web.repositories.settings import is_supported_temp_mail_provider_name
+        from outlook_web.temp_mail_registry import _REGISTRY
 
         del _REGISTRY["cloudflare_temp_mail"]
 
@@ -132,8 +132,8 @@ class TestIsSupportedTempMailProviderName(_RegistryTestCase):
 
     def test_none_input_returns_false_in_empty_registry(self):
         """None 输入在空注册表时应返回 False。"""
-        from outlook_web.temp_mail_registry import _REGISTRY
         from outlook_web.repositories.settings import is_supported_temp_mail_provider_name
+        from outlook_web.temp_mail_registry import _REGISTRY
 
         _REGISTRY.clear()
         self.assertFalse(is_supported_temp_mail_provider_name(None))
@@ -161,8 +161,8 @@ class TestValidateTempMailProviderName(_RegistryTestCase):
 
     def test_raises_value_error_when_registry_is_empty(self):
         """注册表为空时，任何名称都应抛出 ValueError。"""
-        from outlook_web.temp_mail_registry import _REGISTRY
         from outlook_web.repositories.settings import validate_temp_mail_provider_name
+        from outlook_web.temp_mail_registry import _REGISTRY
 
         _REGISTRY.clear()
         with self.assertRaises(ValueError) as ctx:
@@ -171,8 +171,8 @@ class TestValidateTempMailProviderName(_RegistryTestCase):
 
     def test_validates_newly_added_plugin(self):
         """动态添加的插件 provider 应通过验证。"""
-        from outlook_web.temp_mail_registry import _REGISTRY
         from outlook_web.repositories.settings import validate_temp_mail_provider_name
+        from outlook_web.temp_mail_registry import _REGISTRY
 
         _REGISTRY["plugin_provider"] = type("Plugin", (), {})
 
@@ -180,8 +180,8 @@ class TestValidateTempMailProviderName(_RegistryTestCase):
 
     def test_raises_after_provider_removed(self):
         """provider 被移除后，验证应抛出 ValueError。"""
-        from outlook_web.temp_mail_registry import _REGISTRY
         from outlook_web.repositories.settings import validate_temp_mail_provider_name
+        from outlook_web.temp_mail_registry import _REGISTRY
 
         del _REGISTRY["cloudflare_temp_mail"]
 

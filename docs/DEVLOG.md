@@ -1,5 +1,22 @@
 # DEVLOG
 
+## v2.2.2 - CI 质量门禁彻底修复
+
+发布日期：2026-04-22
+
+### 修复
+
+- **CI 质量门禁彻底修复**：
+  - `isort` 排序失败：修复 `tests/test_settings_dynamic_provider_names.py` 内部 import 顺序。
+  - `coverage` 报告失败：在 `pyproject.toml` 中配置 `[tool.coverage.run]`，omit 测试期间动态创建的临时插件文件，解决 `No source for code` 错误。
+  - 插件测试文件泄漏：将 `test_temp_mail_plugin_manager.py` 与 `test_temp_mail_plugin_api.py` 的 `tearDown` 中文件清理模式从 `mock_*.py` 放宽为 `*.py`。
+
+### 重要变更
+
+- **版本升级**：`outlook_web.__version__` 从 `2.2.1` 升级为 `2.2.2`。
+
+---
+
 ## v2.2.1 - CI 兼容性修复
 
 发布日期：2026-04-22

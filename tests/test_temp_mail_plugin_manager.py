@@ -80,7 +80,7 @@ class TestPluginManagerInstall(unittest.TestCase):
         for key in list(sys.modules.keys()):
             if key.startswith("_plugin_"):
                 del sys.modules[key]
-        for f in self._tmp_dir.glob("mock_*.py"):
+        for f in self._tmp_dir.glob("*.py"):
             f.unlink(missing_ok=True)
         if self._registry_file.exists():
             self._registry_file.unlink()
@@ -319,7 +319,7 @@ class TestPluginManagerUninstall(unittest.TestCase):
         for key in list(sys.modules.keys()):
             if key.startswith("_plugin_"):
                 del sys.modules[key]
-        for f in self._tmp_dir.glob("mock_*.py"):
+        for f in self._tmp_dir.glob("*.py"):
             f.unlink(missing_ok=True)
 
     # D-UNIN-01
