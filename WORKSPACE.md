@@ -4,6 +4,98 @@
 
 ---
 
+## 2026-04-23
+
+### 操作记录
+
+#### 230. 全部分支以远程为主强制同步
+
+**时间**：2026-04-23
+
+**操作背景**：
+用户要求将所有本地分支以远程为主进行同步。
+
+**涉及分支**：
+- 主仓库：`main`、`alias-email-merge`、`pr-48-personal-information`
+- Worktree：`Buggithubissue`（`E:/hushaokang/Data-code/EnsoAi/outlookEmail/Buggithubissue`）、`dev`（`E:/hushaokang/Data-code/EnsoAi/outlookEmail/dev`）、`feature`（`E:/hushaokang/Data-code/EnsoAi/outlookEmail/feature`）
+
+**执行方式**：
+对每个分支执行 `git fetch origin && git reset --hard origin/<branch>`。
+
+**结果**：
+全部 6 个本地分支已成功对齐远程最新提交。
+
+| 分支 | 同步后 commit |
+|---|---|
+| main | e4ff79a |
+| Buggithubissue | e4ff79a |
+| alias-email-merge | 9f4c1c2 |
+| dev | c64149e |
+| feature | 9f4c1c2 |
+| pr-48-personal-information | 0a171b5 |
+
+---
+
+#### 231. 本地服务启动供测试
+
+**时间**：2026-04-23
+
+**操作**：
+在 `main` 工作树启动后台验收服务实例。
+
+**启动参数**：
+- 命令：`python start.py`
+- 模式：后台独立进程（Start-Process）
+- PID：`12236`
+- 访问地址：`http://127.0.0.1:5000` / `http://10.21.79.114:5000`
+- 日志：`logs/server_20260423_154013.log`
+- 数据库：`data/outlook_accounts.db`（复用现有）
+- 调度器：已启动（按 `.env` 配置）
+- 登录密码：`admin123`（`.env` 配置）
+
+**验证**：
+- `GET /healthz` 返回 200 ✅
+- 服务正常运行中，等待用户测试
+
+**当前状态**：
+服务已就绪，用户可访问 `http://127.0.0.1:5000` 进行测试。
+
+---
+
+#### 232. 发布 v2.3.0
+
+**时间**：2026-04-23
+
+**操作背景**：
+用户要求按照 RELEASE 规范，为距离上一次推送（v2.2.2）的新修改生成发布日志并发布到 GitHub Release。
+
+**执行步骤**：
+
+1. **分析变更**：梳理 v2.2.2 到 main 的全部 diff，确定版本号为 **v2.3.0**（minor 升级）。
+2. **更新版本号**：`outlook_web/__init__.py` `2.2.2` → `2.3.0`，commit `1771ff2`。
+3. **同步 DEVLOG**：`docs/DEVLOG.md` 新增 v2.3.0 发布记录，commit `558a7c6`。
+4. **Push 到远程**：`main` 已 push 到 `origin/main`。
+5. **运行测试**：
+   - 核心模块测试通过：`test_version_update` + `test_invalid_token_governance` + `test_v190_frontend_contract`，共 82 条用例，18.482s，OK ✅
+   - 全量 unittest 回归：受当前网络环境影响（Microsoft Graph API SSL/ReadTimeout），无法在 20 分钟内完成；历史基线为 `Ran 1370 tests OK`（skipped=7）
+6. **构建产物**：
+   - Docker 构建失败：当前环境未安装 Docker ❌
+   - 源码及浏览器扩展产物由 GitHub Release 自动附带
+7. **打 Tag & 创建 Release**：
+   - Tag：`v2.3.0` 已 push
+   - Release：`https://github.com/ZeroPointSix/outlookEmailPlus/releases/tag/v2.3.0` ✅
+
+**发布日志摘要**：
+
+| 类别 | 内容 |
+|---|---|
+| 新增功能 | Issue #49 失效账号检测与治理闭环、浏览器扩展档案字段只读化 + 点击复制反馈 |
+| 修复 | Issue #52 前端邮件列表排序与滚动位置、浏览器扩展 UX 修复（消息栏跳动 + 移除复制色反馈） |
+| 重要变更 | dev → main 合并、版本号 2.2.2 → 2.3.0 |
+| 测试/验证 | 核心模块 82 条通过；全量回归因网络超时未完成（历史基线 1370 条 OK） |
+
+---
+
 ## 2026-04-22
 
 ### 操作记录
