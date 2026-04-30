@@ -5,6 +5,7 @@ from typing import Any, Dict, List, Optional
 
 from outlook_web.db import get_db
 from outlook_web.security.crypto import decrypt_data, encrypt_data
+from outlook_web.services.mailbox_resolver import normalize_alias_email
 
 COMPACT_SUMMARY_FIELDS = (
     "latest_email_subject",
@@ -158,6 +159,22 @@ def get_account_by_email(email_addr: str) -> Optional[Dict]:
     _decrypt_account_field(account, "refresh_token")
     _decrypt_account_field(account, "imap_password")
     return account
+
+
+def find_account_by_email_alias(email_addr: str) -> Optional[Dict]:
+    raw_email = str(email_addr or "").strip()
+    if not raw_email:
+        return None
+
+    account = get_account_by_email(raw_email)
+    if account:
+        return account
+
+    normalized_email = normalize_alias_email(raw_email)
+    if not normalized_email or normalized_email == raw_email:
+        return None
+
+    return get_account_by_email(normalized_email)
 
 
 def get_account_by_id(account_id: int) -> Optional[Dict]:

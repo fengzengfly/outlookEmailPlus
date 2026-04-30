@@ -321,6 +321,28 @@ class ExternalApiMessageTests(ExternalApiBaseTest):
         self.assertEqual(data.get("code"), "OK")
         self.assertEqual(len(data.get("data", {}).get("emails", [])), 1)
 
+    @patch("outlook_web.services.graph.get_emails_graph")
+    def test_external_latest_message_supports_raw_alias_stored_in_db(self, mock_get_emails_graph):
+        email_addr = self._insert_outlook_account("user+signup@extapi.test")
+        self._set_external_api_key("abc123")
+        mock_get_emails_graph.return_value = {
+            "success": True,
+            "emails": [self._graph_email(message_id="msg-raw-alias")],
+        }
+
+        client = self.app.test_client()
+        resp = client.get(
+            "/api/external/messages/latest",
+            query_string={"email": "user+signup@extapi.test"},
+            headers=self._auth_headers(),
+        )
+
+        self.assertEqual(resp.status_code, 200)
+        data = resp.get_json()
+        self.assertTrue(data.get("success"))
+        self.assertEqual(data.get("data", {}).get("id"), "msg-raw-alias")
+        self.assertEqual(data.get("data", {}).get("email_address"), "user+signup@extapi.test")
+
 
 class ExternalApiKeyScopeTests(ExternalApiBaseTest):
     @patch("outlook_web.services.graph.get_emails_graph")
@@ -335,6 +357,25 @@ class ExternalApiKeyScopeTests(ExternalApiBaseTest):
         client = self.app.test_client()
         resp = client.get(
             f"/api/external/messages?email={email_addr}",
+            headers=self._auth_headers("scope-123"),
+        )
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.get_json().get("success"))
+
+    @patch("outlook_web.services.graph.get_emails_graph")
+    def test_external_messages_allows_alias_request_with_canonical_scope(self, mock_get_emails_graph):
+        email_addr = self._insert_outlook_account("alias@extapi.test")
+        self._create_external_api_key("partner-a", "scope-123", allowed_emails=[email_addr])
+        mock_get_emails_graph.return_value = {
+            "success": True,
+            "emails": [self._graph_email()],
+        }
+
+        client = self.app.test_client()
+        resp = client.get(
+            "/api/external/messages",
+            query_string={"email": "alias+signup@extapi.test"},
             headers=self._auth_headers("scope-123"),
         )
 

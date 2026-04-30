@@ -82,6 +82,35 @@ class MailboxResolverTests(unittest.TestCase):
         self.assertEqual(mailbox["kind"], "account")
         self.assertEqual(mailbox["email"], "alias@resolver.test")
 
+    def test_resolve_mailbox_supports_raw_alias_stored_in_db(self):
+        with self.app.app_context():
+            from outlook_web.db import get_db
+            from outlook_web.services import mailbox_resolver
+
+            db = get_db()
+            db.execute(
+                """
+                INSERT INTO accounts (email, password, client_id, refresh_token, group_id, status, account_type, provider)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    "alias+signup@resolver.test",
+                    "pw",
+                    "cid",
+                    "rt",
+                    1,
+                    "active",
+                    "outlook",
+                    "outlook",
+                ),
+            )
+            db.commit()
+
+            mailbox = mailbox_resolver.resolve_mailbox("alias+signup@resolver.test")
+
+        self.assertEqual(mailbox["kind"], "account")
+        self.assertEqual(mailbox["email"], "alias+signup@resolver.test")
+
     def test_resolve_mailbox_returns_temp_descriptor_for_temp_mailbox(self):
         with self.app.app_context():
             from outlook_web.repositories import temp_emails as temp_emails_repo

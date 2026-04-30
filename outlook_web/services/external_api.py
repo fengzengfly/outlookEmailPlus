@@ -206,8 +206,12 @@ def ensure_external_email_scope(email_addr: str, *, allow_finished: bool = False
     consumer = get_current_external_api_consumer()
     if mailbox.get("kind") == "account":
         allowed_emails = [str(item or "").strip().lower() for item in (consumer.get("allowed_emails") or [])]
-        target_email = str(email_addr or "").strip().lower()
-        if allowed_emails and target_email not in allowed_emails:
+        target_candidates = {
+            str(email_addr or "").strip().lower(),
+            str(mailbox.get("email") or "").strip().lower(),
+        }
+        target_candidates.discard("")
+        if allowed_emails and not target_candidates.intersection(allowed_emails):
             raise EmailScopeForbiddenError(
                 "当前 API Key 无权访问该邮箱",
                 data={
@@ -1662,7 +1666,9 @@ def resolve_external_mail_scope(
         raise InvalidParamError("email 参数无效")
 
     ensure_external_email_access(email_addr, allow_finished=allow_finished)
-    return email_addr, baseline
+    mailbox = mailbox_resolver.resolve_mailbox(email_addr)
+    resolved_email = str(mailbox.get("email") or email_addr).strip()
+    return resolved_email or str(email_addr or "").strip(), baseline
 
 
 def record_claim_read_context(

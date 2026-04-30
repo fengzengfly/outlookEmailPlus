@@ -152,9 +152,36 @@ class EmailAliasFlowTests(unittest.TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertTrue(resp.get_json().get("success"))
 
+    @patch("outlook_web.services.graph.get_emails_graph")
+    def test_internal_get_emails_supports_raw_alias_stored_in_db(self, mock_get_emails_graph):
+        self._insert_outlook_account("user+signup@aliasflow.test")
+        mock_get_emails_graph.return_value = {
+            "success": True,
+            "emails": [self._graph_email()],
+        }
+
+        client = self.app.test_client()
+        self._login(client)
+        resp = client.get("/api/emails/user+signup@aliasflow.test")
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.get_json().get("success"))
+
     @patch("outlook_web.services.graph.get_email_detail_graph")
     def test_internal_get_email_detail_supports_plus_alias_email(self, mock_get_email_detail_graph):
         self._insert_outlook_account("user@aliasflow.test")
+        mock_get_email_detail_graph.return_value = self._graph_detail()
+
+        client = self.app.test_client()
+        self._login(client)
+        resp = client.get("/api/email/user+signup@aliasflow.test/msg-1")
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.get_json().get("success"))
+
+    @patch("outlook_web.services.graph.get_email_detail_graph")
+    def test_internal_get_email_detail_supports_raw_alias_stored_in_db(self, mock_get_email_detail_graph):
+        self._insert_outlook_account("user+signup@aliasflow.test")
         mock_get_email_detail_graph.return_value = self._graph_detail()
 
         client = self.app.test_client()

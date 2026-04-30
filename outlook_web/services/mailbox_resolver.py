@@ -35,12 +35,13 @@ def normalize_alias_email(email_addr: str | None) -> str | None:
 
 def resolve_mailbox(email_addr: str) -> dict[str, Any]:
     external_api_service = _external_api_service()
-    normalized_email = normalize_alias_email(str(email_addr or "").strip()) or ""
+    raw_email = str(email_addr or "").strip()
+    normalized_email = normalize_alias_email(raw_email) or ""
     if not normalized_email or "@" not in normalized_email:
         raise external_api_service.InvalidParamError("email 参数无效")
 
     # BUG-04: accounts 与 temp_emails 同邮箱命中时，必须显式冲突（避免安全边界被绕开）
-    account = accounts_repo.get_account_by_email(normalized_email)
+    account = accounts_repo.find_account_by_email_alias(raw_email)
     temp_mailbox = temp_emails_repo.get_temp_email_by_address(normalized_email, view="descriptor")
     if account and temp_mailbox:
         raise external_api_service.MailboxConflictError(
@@ -95,7 +96,7 @@ def resolve_mailbox(email_addr: str) -> dict[str, Any]:
             }
         return {
             "kind": "account",
-            "email": normalized_email,
+            "email": str(account.get("email") or normalized_email).strip(),
             "source": str(account.get("provider") or account.get("account_type") or "outlook"),
             "provider_name": (
                 "imap_generic" if str(account.get("account_type") or "").strip().lower() == "imap" else "outlook_graph"
@@ -107,7 +108,7 @@ def resolve_mailbox(email_addr: str) -> dict[str, Any]:
     if temp_mailbox:
         return temp_mailbox
 
-    raise external_api_service.AccountNotFoundError("账号不存在", data={"email": normalized_email})
+    raise external_api_service.AccountNotFoundError("账号不存在", data={"email": raw_email or normalized_email})
 
 
 def ensure_mailbox_can_read(

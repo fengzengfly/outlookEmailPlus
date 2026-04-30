@@ -101,8 +101,9 @@ def _update_account_summary_from_verification(account: Dict[str, Any], data: Dic
 def api_get_emails(email_addr: str) -> Any:
     """获取邮件列表（支持分页，不使用缓存）"""
     _t0 = time.monotonic()
-    email_addr = normalize_alias_email(email_addr) or ""
-    account = accounts_repo.get_account_by_email(email_addr)
+    raw_email_addr = str(email_addr or "").strip()
+    email_addr = normalize_alias_email(raw_email_addr) or ""
+    account = accounts_repo.find_account_by_email_alias(raw_email_addr)
 
     if not account:
         return build_error_response(
@@ -410,14 +411,15 @@ def api_delete_emails() -> Any:
 def api_get_email_detail(email_addr: str, message_id: str) -> Any:
     """获取邮件详情"""
     _t0 = time.monotonic()
-    email_addr = normalize_alias_email(email_addr) or ""
+    raw_email_addr = str(email_addr or "").strip()
+    email_addr = normalize_alias_email(raw_email_addr) or ""
     _LOGGER.debug(
         "[PERF] get_email_detail | 开始 | email=%s message_id=%s",
         email_addr,
         message_id,
     )
     _LOGGER.info("email_detail_request email=%s message_id=%s", email_addr, message_id)
-    account = accounts_repo.get_account_by_email(email_addr)
+    account = accounts_repo.find_account_by_email_alias(raw_email_addr)
 
     if not account:
         _LOGGER.warning("email_detail_account_not_found email=%s", email_addr)
@@ -667,7 +669,7 @@ def _parse_external_common_args(*, default_since_minutes: int | None = None) -> 
     """
     claim_token = (request.args.get("claim_token") or "").strip() or None
     raw_email = (request.args.get("email") or "").strip()
-    email_addr = normalize_alias_email(raw_email) if raw_email else ""
+    email_addr = raw_email
 
     # PR#27: 使用 resolve_external_mail_scope 统一处理 claim_token + email
     email_addr, baseline_timestamp = external_api_service.resolve_external_mail_scope(
