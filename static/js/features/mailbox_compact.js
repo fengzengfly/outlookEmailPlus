@@ -2,6 +2,15 @@
             return Array.isArray(accountsCache[currentGroupId]) ? accountsCache[currentGroupId] : [];
         }
 
+        function getCompactTotalAccounts() {
+            if (!Array.isArray(groups)) return getCompactVisibleAccounts().length;
+            const currentGroup = groups.find(group => group.id === currentGroupId);
+            const total = currentGroup && Number.isFinite(Number(currentGroup.account_count))
+                ? Number(currentGroup.account_count)
+                : getCompactVisibleAccounts().length;
+            return total;
+        }
+
         function getCompactAccountById(accountId) {
             return getCompactVisibleAccounts().find(account => account.id === accountId) || null;
         }
@@ -226,9 +235,11 @@
             }
         }
 
-        function renderCompactAccountList(accounts) {
+        function renderCompactAccountList(accounts, totalCount = null) {
             const container = document.getElementById('compactAccountList');
             if (!container) return;
+
+            const totalAccounts = Number.isFinite(Number(totalCount)) ? Number(totalCount) : getCompactTotalAccounts();
 
             if (!accounts || accounts.length === 0) {
                 container.innerHTML = `

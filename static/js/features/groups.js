@@ -191,15 +191,26 @@
             }
 
             try {
-                const response = await fetch(`/api/accounts?group_id=${groupId}`);
+                const pageSize = Math.max(ACCOUNT_PAGE_SIZE, 1);
+                const response = await fetch(`/api/accounts?group_id=${groupId}&page=1&page_size=${pageSize}`);
                 const data = await response.json();
 
                 if (data.success) {
+                    const pagination = data.pagination || {};
+                    const total = Number.isFinite(Number(pagination.total)) ? Number(pagination.total) : (data.accounts || []).length;
+                    const accountCount = Number.isFinite(Number(pagination.total)) ? Number(pagination.total) : (data.accounts || []).length;
+
                     // 缓存数据
                     accountsCache[groupId] = data.accounts;
-                    renderAccountList(data.accounts);
+                    renderAccountList(data.accounts, total);
                     if (typeof renderCompactAccountList === 'function') {
-                        renderCompactAccountList(data.accounts);
+                        renderCompactAccountList(data.accounts, total);
+                    }
+                    if (Array.isArray(groups)) {
+                        const group = groups.find(item => item.id === groupId);
+                        if (group) {
+                            group.account_count = accountCount;
+                        }
                     }
                     // 恢复滚动位置
                     if (forceRefresh) {
@@ -235,8 +246,10 @@
         }
 
         // 渲染邮箱列表
-        function renderAccountList(accounts) {
+        function renderAccountList(accounts, totalCount = null) {
             const container = document.getElementById('accountList');
+
+            const totalAccounts = Number.isFinite(Number(totalCount)) ? Number(totalCount) : accounts.length;
 
             if (accounts.length === 0) {
                 container.innerHTML = `
@@ -254,14 +267,11 @@
                 return;
             }
 
-            // ===== 分页计算 =====
-            const totalAccounts = accounts.length;
-            const totalPages = Math.ceil(totalAccounts / ACCOUNT_PAGE_SIZE);
+            // 后端已分页，这里只渲染当前返回结果。
+            const totalPages = Math.max(1, Math.ceil(totalAccounts / ACCOUNT_PAGE_SIZE));
             if (currentAccountPage > totalPages) currentAccountPage = totalPages;
             if (currentAccountPage < 1) currentAccountPage = 1;
-            const startIdx = (currentAccountPage - 1) * ACCOUNT_PAGE_SIZE;
-            // 只渲染当前页的账号，大幅减少 DOM 节点数
-            const pageAccounts = accounts.slice(startIdx, startIdx + ACCOUNT_PAGE_SIZE);
+            const pageAccounts = accounts;
             const avatarGradients = [
                 ['#B85C38', '#E8734A'],  // 砖红→珊瑚
                 ['#3A7D44', '#5BAF6A'],  // 翠绿→嫩绿
@@ -379,12 +389,14 @@
 
         // 跳转到指定账号分页
         function goToAccountPage(page) {
-            if (!accountsCache[currentGroupId]) return;
-            const accounts = applyFiltersAndSort(accountsCache[currentGroupId]);
-            const totalPages = Math.ceil(accounts.length / ACCOUNT_PAGE_SIZE);
+            if (!currentGroupId) return;
+            const totalAccounts = Array.isArray(groups)
+                ? ((groups.find(group => group.id === currentGroupId) || {}).account_count || 0)
+                : 0;
+            const totalPages = Math.max(1, Math.ceil(totalAccounts / ACCOUNT_PAGE_SIZE));
             if (page < 1 || page > totalPages) return;
             currentAccountPage = page;
-            renderAccountList(accounts);
+            loadAccountsByGroup(currentGroupId, true);
             // 滚动到账号列表顶部
             const container = document.getElementById('accountList');
             if (container) container.scrollTop = 0;

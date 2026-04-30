@@ -123,9 +123,22 @@ def _outlook_basic_auth_import_error() -> str:
 
 @login_required
 def api_get_accounts() -> Any:
-    """获取所有账号"""
+    """获取账号列表。"""
     group_id = request.args.get("group_id", type=int)
-    accounts = accounts_repo.load_accounts(group_id)
+    page = request.args.get("page", default=1, type=int) or 1
+    page_size = request.args.get("page_size", type=int)
+
+    if page < 1:
+        page = 1
+
+    if group_id and page_size is not None:
+        page_size = max(1, min(page_size, 200))
+        accounts, total = accounts_repo.load_accounts_page(group_id, page, page_size)
+    else:
+        accounts = accounts_repo.load_accounts(group_id)
+        total = len(accounts)
+        if page_size is None:
+            page_size = total if total > 0 else 0
 
     # 获取每个账号的最后刷新状态（批量查询，避免 N+1）
     db = get_db()
@@ -199,7 +212,14 @@ def api_get_accounts() -> Any:
                 "latest_verification_received_at": acc.get("latest_verification_received_at", ""),
             }
         )
-    return jsonify({"success": True, "accounts": safe_accounts})
+
+    pagination = {
+        "page": page,
+        "page_size": page_size,
+        "total": total,
+        "has_next": bool(page_size and page * page_size < total),
+    }
+    return jsonify({"success": True, "accounts": safe_accounts, "pagination": pagination})
 
 
 @login_required

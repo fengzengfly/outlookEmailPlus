@@ -332,6 +332,103 @@ class V191CompactModeApiRedTests(unittest.TestCase):
         payload = resp.get_json() or {}
         self.assertEqual(payload.get("success"), True)
 
+    def test_t_api_005d_accounts_api_honors_group_pagination(self):
+        client = self.app.test_client()
+        self._login(client)
+        group_id = self._create_group()
+        created_ids = [self._create_account(group_id=group_id) for _ in range(3)]
+
+        resp = client.get(f"/api/accounts?group_id={group_id}&page=2&page_size=1")
+
+        self.assertEqual(resp.status_code, 200)
+        payload = resp.get_json() or {}
+        self.assertEqual(payload.get("success"), True)
+        accounts = payload.get("accounts") or []
+        self.assertEqual(len(accounts), 1)
+        self.assertEqual(accounts[0].get("id"), created_ids[1])
+
+        pagination = payload.get("pagination") or {}
+        self.assertEqual(pagination.get("page"), 2)
+        self.assertEqual(pagination.get("page_size"), 1)
+        self.assertEqual(pagination.get("total"), 3)
+        self.assertTrue(pagination.get("has_next"))
+
+    def test_t_api_005e_accounts_api_returns_final_page_without_next_flag(self):
+        client = self.app.test_client()
+        self._login(client)
+        group_id = self._create_group()
+        created_ids = [self._create_account(group_id=group_id) for _ in range(3)]
+
+        resp = client.get(f"/api/accounts?group_id={group_id}&page=3&page_size=1")
+
+        self.assertEqual(resp.status_code, 200)
+        payload = resp.get_json() or {}
+        accounts = payload.get("accounts") or []
+        self.assertEqual(len(accounts), 1)
+        self.assertEqual(accounts[0].get("id"), created_ids[0])
+
+        pagination = payload.get("pagination") or {}
+        self.assertEqual(pagination.get("page"), 3)
+        self.assertEqual(pagination.get("page_size"), 1)
+        self.assertEqual(pagination.get("total"), 3)
+        self.assertFalse(pagination.get("has_next"))
+
+    def test_t_api_005f_accounts_api_keeps_full_response_when_page_size_missing(self):
+        client = self.app.test_client()
+        self._login(client)
+        group_id = self._create_group()
+        for _ in range(3):
+            self._create_account(group_id=group_id)
+
+        resp = client.get(f"/api/accounts?group_id={group_id}")
+
+        self.assertEqual(resp.status_code, 200)
+        payload = resp.get_json() or {}
+        accounts = payload.get("accounts") or []
+        self.assertEqual(len(accounts), 3)
+
+        pagination = payload.get("pagination") or {}
+        self.assertEqual(pagination.get("page"), 1)
+        self.assertEqual(pagination.get("page_size"), 3)
+        self.assertEqual(pagination.get("total"), 3)
+        self.assertFalse(pagination.get("has_next"))
+
+    def test_t_api_005g_accounts_api_caps_page_size(self):
+        client = self.app.test_client()
+        self._login(client)
+        group_id = self._create_group()
+        for _ in range(210):
+            self._create_account(group_id=group_id)
+
+        resp = client.get(f"/api/accounts?group_id={group_id}&page=1&page_size=999")
+
+        self.assertEqual(resp.status_code, 200)
+        payload = resp.get_json() or {}
+        accounts = payload.get("accounts") or []
+        self.assertEqual(len(accounts), 200)
+
+        pagination = payload.get("pagination") or {}
+        self.assertEqual(pagination.get("page_size"), 200)
+        self.assertEqual(pagination.get("total"), 210)
+        self.assertTrue(pagination.get("has_next"))
+
+    def test_t_api_005h_accounts_api_normalizes_invalid_page_number(self):
+        client = self.app.test_client()
+        self._login(client)
+        group_id = self._create_group()
+        created_ids = [self._create_account(group_id=group_id) for _ in range(2)]
+
+        resp = client.get(f"/api/accounts?group_id={group_id}&page=0&page_size=1")
+
+        self.assertEqual(resp.status_code, 200)
+        payload = resp.get_json() or {}
+        accounts = payload.get("accounts") or []
+        self.assertEqual(len(accounts), 1)
+        self.assertEqual(accounts[0].get("id"), created_ids[-1])
+
+        pagination = payload.get("pagination") or {}
+        self.assertEqual(pagination.get("page"), 1)
+
     def test_t_api_006_single_account_tagging_reuses_batch_tags_endpoint(self):
         client = self.app.test_client()
         self._login(client)

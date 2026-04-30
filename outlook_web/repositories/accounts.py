@@ -48,29 +48,7 @@ def _decrypt_account_field(account: Dict[str, Any], field_name: str) -> None:
         )
 
 
-def load_accounts(group_id: int = None) -> List[Dict]:
-    """从数据库加载邮箱账号（自动解密敏感字段，批量加载 tags 避免 N+1）"""
-    db = get_db()
-    if group_id:
-        cursor = db.execute(
-            """
-            SELECT a.*, g.name as group_name, g.color as group_color
-            FROM accounts a
-            LEFT JOIN groups g ON a.group_id = g.id
-            WHERE a.group_id = ?
-            ORDER BY a.created_at DESC
-        """,
-            (group_id,),
-        )
-    else:
-        cursor = db.execute("""
-            SELECT a.*, g.name as group_name, g.color as group_color
-            FROM accounts a
-            LEFT JOIN groups g ON a.group_id = g.id
-            ORDER BY a.created_at DESC
-        """)
-    rows = cursor.fetchall()
-
+def _build_accounts_from_rows(rows: List[sqlite3.Row]) -> List[Dict[str, Any]]:
     tags_by_account: Dict[int, List[Dict[str, Any]]] = {}
     try:
         account_ids = [int(r["id"]) for r in rows]
@@ -78,6 +56,7 @@ def load_accounts(group_id: int = None) -> List[Dict]:
         account_ids = []
 
     if account_ids:
+        db = get_db()
         try:
             placeholders = ",".join(["?"] * len(account_ids))
             tag_rows = db.execute(
@@ -116,6 +95,55 @@ def load_accounts(group_id: int = None) -> List[Dict]:
         account["tags"] = tags_by_account.get(account_id_value, []) if account_id_value is not None else []
         accounts.append(account)
     return accounts
+
+
+def load_accounts(group_id: int = None) -> List[Dict]:
+    """从数据库加载邮箱账号（自动解密敏感字段，批量加载 tags 避免 N+1）"""
+    db = get_db()
+    if group_id:
+        cursor = db.execute(
+            """
+            SELECT a.*, g.name as group_name, g.color as group_color
+            FROM accounts a
+            LEFT JOIN groups g ON a.group_id = g.id
+            WHERE a.group_id = ?
+            ORDER BY a.created_at DESC
+        """,
+            (group_id,),
+        )
+    else:
+        cursor = db.execute("""
+            SELECT a.*, g.name as group_name, g.color as group_color
+            FROM accounts a
+            LEFT JOIN groups g ON a.group_id = g.id
+            ORDER BY a.created_at DESC
+        """)
+    rows = cursor.fetchall()
+    return _build_accounts_from_rows(rows)
+
+
+def load_accounts_page(group_id: int, page: int, page_size: int) -> tuple[List[Dict[str, Any]], int]:
+    """分页加载指定分组的邮箱账号。"""
+    db = get_db()
+    safe_page = max(int(page or 1), 1)
+    safe_page_size = max(int(page_size or 1), 1)
+    offset = (safe_page - 1) * safe_page_size
+
+    total_row = db.execute("SELECT COUNT(*) AS cnt FROM accounts WHERE group_id = ?", (group_id,)).fetchone()
+    total = int(total_row["cnt"] or 0) if total_row else 0
+
+    rows = db.execute(
+        """
+        SELECT a.*, g.name as group_name, g.color as group_color
+        FROM accounts a
+        LEFT JOIN groups g ON a.group_id = g.id
+        WHERE a.group_id = ?
+        ORDER BY a.created_at DESC
+        LIMIT ? OFFSET ?
+        """,
+        (group_id, safe_page_size, offset),
+    ).fetchall()
+    return _build_accounts_from_rows(rows), total
 
 
 def get_account_by_email(email_addr: str) -> Optional[Dict]:
