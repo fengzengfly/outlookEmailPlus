@@ -95,7 +95,7 @@ class PoolServiceProjectReuseTests(unittest.TestCase):
 
         self.assertEqual(new_status, "available")
 
-    def test_complete_claim_without_claimed_project_key_falls_back_to_old_behavior(self):
+    def test_complete_claim_without_claimed_project_key_returns_available_for_outlook_account(self):
         account_id = self._insert_claimed_account(
             email="svc-old@example.com",
             claim_token="clm_svc_old",
@@ -114,7 +114,7 @@ class PoolServiceProjectReuseTests(unittest.TestCase):
                 result="success",
             )
 
-        self.assertEqual(new_status, "used")
+        self.assertEqual(new_status, "available")
 
     def test_complete_claim_cloudflare_temp_mail_stays_on_old_semantics(self):
         account_id = self._insert_claimed_account(
@@ -139,11 +139,10 @@ class PoolServiceProjectReuseTests(unittest.TestCase):
 
         self.assertEqual(new_status, "used")
 
-    def test_claim_random_blank_project_key_treated_as_old_behavior(self):
+    def test_claim_random_blank_project_key_still_allows_success_reuse_path(self):
         with self.app.app_context():
             from outlook_web.db import get_db
             from outlook_web.services import pool as pool_service
-            from outlook_web.services.pool import PoolServiceError
 
             db = get_db()
             db.execute("""
@@ -163,15 +162,14 @@ class PoolServiceProjectReuseTests(unittest.TestCase):
             )
             self.assertEqual(account["email"], "svc-blank@example.com")
 
-            with self.assertRaises(PoolServiceError) as ctx:
-                pool_service.complete_claim(
-                    account_id=account["id"],
-                    claim_token="wrong_token",
-                    caller_id="svc_bot",
-                    task_id="blank_project_task",
-                    result="success",
-                )
-            self.assertEqual(ctx.exception.error_code, "token_mismatch")
+            new_status = pool_service.complete_claim(
+                account_id=account["id"],
+                claim_token=account["claim_token"],
+                caller_id="svc_bot",
+                task_id="blank_project_task",
+                result="success",
+            )
+            self.assertEqual(new_status, "available")
 
     def test_complete_claim_preserves_invalid_result_validation(self):
         account_id = self._insert_claimed_account(

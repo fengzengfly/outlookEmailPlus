@@ -129,18 +129,13 @@ def _is_project_reuse_eligible_account(
     account_type: Optional[str],
     claimed_project_key: Optional[str],
 ) -> bool:
-    """判定账号是否适用项目维度成功复用路径 (FD §2.1)。
-
-    三重门控缺一不可：
-    1. claimed_project_key 非空 — 必须在 claim 时显式传入
-    2. 非 cloudflare_temp_mail — CF 临时邮箱不在本期覆盖范围
-    3. 非 temp_mail — 一次性临时邮箱不在本期覆盖范围
-    """
-    if not claimed_project_key:
+    """判定账号是否适用 success 后回 available 的复用路径。"""
+    normalized_provider = (provider or "").strip().lower()
+    normalized_account_type = (account_type or "").strip().lower()
+    normalized_project_key = (claimed_project_key or "").strip()
+    if normalized_provider == "cloudflare_temp_mail":
         return False
-    if (provider or "").strip() == "cloudflare_temp_mail":
-        return False
-    if (account_type or "").strip() == "temp_mail":
+    if normalized_account_type == "temp_mail":
         return False
     return True
 

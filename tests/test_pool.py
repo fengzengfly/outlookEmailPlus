@@ -53,13 +53,13 @@ class PoolRepositoryTests(unittest.TestCase):
                 result="success",
                 detail="注册成功",
             )
-            self.assertEqual(new_status, "used")
+            self.assertEqual(new_status, "available")
 
             row2 = conn.execute(
                 "SELECT pool_status, success_count FROM accounts WHERE id = ?",
                 (claimed_id,),
             ).fetchone()
-            self.assertEqual(row2["pool_status"], "used")
+            self.assertEqual(row2["pool_status"], "available")
             self.assertEqual(row2["success_count"], 1)
         finally:
             conn.close()
@@ -1091,7 +1091,7 @@ class PoolApiTests(unittest.TestCase):
         complete_data = json.loads(complete_resp.data)
         self.assertTrue(complete_data["success"])
         self.assertEqual(complete_data["data"]["account_id"], account_data["account_id"])
-        self.assertEqual(complete_data["data"]["pool_status"], "used")
+        self.assertEqual(complete_data["data"]["pool_status"], "available")
 
     def test_claim_release_flow(self):
         self._make_account()

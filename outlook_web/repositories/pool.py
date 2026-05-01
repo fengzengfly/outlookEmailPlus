@@ -17,8 +17,8 @@ logger = logging.getLogger(__name__)
 #
 # 设计决策:
 #   - FD: docs/FD/2026-04-16-邮箱池项目维度成功复用FD.md
-#   - 同 caller+project 只防 success，不防失败/release/expire（FD §2.2）
-#   - success_count > 0 是 claim 排除的唯一门控（TDD §4.1 N-02）
+#   - 同 caller 只防 success，不防失败/release/expire
+#   - success_count > 0 是 claim 排除的唯一门控
 
 RESULT_TO_POOL_STATUS: Dict[str, str] = {
     "success": "used",
@@ -27,6 +27,8 @@ RESULT_TO_POOL_STATUS: Dict[str, str] = {
     "credential_invalid": "retired",
     "network_error": "available",
 }
+
+CALLER_SCOPE_PROJECT_KEY = "__caller_scope__"
 
 
 class PoolRepositoryError(Exception):
@@ -229,23 +231,20 @@ def claim_atomic(
         sql += " AND a.email_domain = ? COLLATE NOCASE"
         params.append(email_domain.strip().lower())
 
-    # PR#27 + v22 语义变更: project_key 防同项目复用
-    # v22 前：NOT EXISTS 即排除（含 claim trace），导致 release 后需删 usage 行（Bug #28）
-    # v22 后：只排除 success_count > 0 的记录，release/expire 产生的 trace 不阻断再次领取
-    if project_key and caller_id:
+    # caller_id 防重复领用：只排除 success_count > 0 的记录
+    # release/expire 产生的 trace 不阻断再次领取
+    if caller_id:
         sql += """
             AND NOT EXISTS (
                 SELECT 1 FROM account_project_usage apu
                 WHERE apu.account_id = a.id
                   AND apu.consumer_key = ?
-                  AND apu.project_key = ?
                   AND apu.success_count > 0
             )
         """
         params.append(caller_id)
-        params.append(project_key)
 
-    sql += " ORDER BY RANDOM() LIMIT 1"
+    sql += " ORDER BY a.last_claimed_at IS NOT NULL, a.last_claimed_at ASC, RANDOM() LIMIT 1"
 
     conn.execute("BEGIN IMMEDIATE")
     account = conn.execute(sql, params).fetchone()
@@ -418,16 +417,7 @@ def complete(
     claimed_project_key: Optional[str] = None,
     enable_project_reuse: Optional[bool] = None,
 ) -> str:
-    """完成领取流程，根据结果更新池状态。
-
-    v22 新增项目复用路径 (FD §2.3):
-    - 当 enable_project_reuse=True 且 claimed_project_key 非空且 result='success' 时，
-      pool_status 回 'available'（而非旧语义的 'used'），同时写入/更新 success 记录。
-    - 旧路径（无 project_key 或非长期邮箱）行为不变：success → used。
-    - enable_project_reuse 由 Service 层根据 _is_project_reuse_eligible_account 判定后传入。
-    """
-    # 读取 claim 时写入的 claimed_project_key 作为复用路径的自动判定依据
-    # 即使 API 层未传 project_key，只要 claim 时带了就能正确走复用路径（TDD §4.1 N-03）
+    """完成领取流程，根据结果更新池状态。"""
     current_row = conn.execute(
         "SELECT claimed_project_key FROM accounts WHERE id = ?",
         (account_id,),
@@ -439,12 +429,11 @@ def complete(
     if effective_claimed_project_key is None:
         effective_claimed_project_key = current_row["claimed_project_key"]
     effective_claimed_project_key = str(effective_claimed_project_key or "").strip() or None
-    effective_enable_project_reuse = (
-        bool(effective_claimed_project_key) if enable_project_reuse is None else enable_project_reuse
-    )
+    effective_enable_project_reuse = True if enable_project_reuse is None else enable_project_reuse
 
     is_success = result == "success"
-    reuse_success = bool(effective_enable_project_reuse and effective_claimed_project_key and is_success)
+    usage_project_key = effective_claimed_project_key or CALLER_SCOPE_PROJECT_KEY
+    reuse_success = bool(effective_enable_project_reuse and caller_id and is_success)
     new_pool_status = "available" if reuse_success else RESULT_TO_POOL_STATUS[result]
     now_str = _utcnow().isoformat() + "Z"
 
@@ -476,9 +465,6 @@ def complete(
         ),
     )
     if reuse_success:
-        # 成功复用路径：写入/更新 project 维度的 success 统计
-        # ON CONFLICT DO UPDATE 实现幂等：重复 success 不会产生重复行
-        # COALESCE(first_success_at) 保留首次成功时间戳，仅更新 last_success_at 和 success_count
         conn.execute(
             """
             INSERT INTO account_project_usage (
@@ -496,7 +482,7 @@ def complete(
             (
                 account_id,
                 caller_id,
-                effective_claimed_project_key,
+                usage_project_key,
                 now_str,
                 now_str,
                 now_str,

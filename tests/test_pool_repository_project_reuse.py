@@ -188,7 +188,7 @@ class PoolRepositoryProjectReuseTests(unittest.TestCase):
             row = db.execute("SELECT claimed_project_key FROM accounts WHERE id = ?", (account_id,)).fetchone()
             self.assertIsNone(row["claimed_project_key"])
 
-    def test_claim_atomic_different_project_success_record_still_allows_claim(self):
+    def test_claim_atomic_caller_success_record_blocks_without_project_key_match(self):
         with self.app.app_context():
             from outlook_web.db import get_db
             from outlook_web.repositories import pool as pool_repo
@@ -210,10 +210,7 @@ class PoolRepositoryProjectReuseTests(unittest.TestCase):
                 project_key="project_beta",
                 email_domain="example.com",
             )
-            self.assertIsNotNone(account)
-            self.assertEqual(account["id"], account_id)
-
-    def test_complete_reuse_path_success_returns_available_and_updates_success_record(self):
+            self.assertIsNone(account)
         with self.app.app_context():
             from outlook_web.db import get_db
             from outlook_web.repositories import pool as pool_repo
@@ -257,7 +254,45 @@ class PoolRepositoryProjectReuseTests(unittest.TestCase):
             self.assertIsNotNone(usage_row)
             self.assertGreaterEqual(usage_row["success_count"], 1)
 
-    def test_complete_old_path_success_still_returns_used(self):
+    def test_complete_caller_only_success_without_project_key_returns_available_for_non_outlook_provider(self):
+        with self.app.app_context():
+            from outlook_web.db import get_db
+            from outlook_web.repositories import pool as pool_repo
+
+            account_id = self._insert_available_account(
+                email="repo-caller-only@example.com",
+                provider="imap",
+                account_type="imap",
+                pool_status="claimed",
+                claim_token="clm_repo_caller_only",
+                claimed_by="repo_bot:repo_task_caller_only",
+                claimed_project_key=None,
+            )
+
+            db = get_db()
+            new_status = pool_repo.complete(
+                db,
+                account_id=account_id,
+                claim_token="clm_repo_caller_only",
+                caller_id="repo_bot",
+                task_id="repo_task_caller_only",
+                result="success",
+                detail="caller only success",
+                enable_project_reuse=True,
+            )
+            self.assertEqual(new_status, "available")
+
+            usage_row = db.execute(
+                """
+                SELECT success_count
+                FROM account_project_usage
+                WHERE account_id = ? AND consumer_key = 'repo_bot' AND project_key = '__caller_scope__'
+                """,
+                (account_id,),
+            ).fetchone()
+            self.assertIsNotNone(usage_row)
+            self.assertGreaterEqual(usage_row["success_count"], 1)
+
         with self.app.app_context():
             from outlook_web.db import get_db
             from outlook_web.repositories import pool as pool_repo
@@ -280,7 +315,7 @@ class PoolRepositoryProjectReuseTests(unittest.TestCase):
                 result="success",
                 detail="old path success",
             )
-            self.assertEqual(new_status, "used")
+            self.assertEqual(new_status, "available")
 
     def test_complete_non_success_on_reuse_path_does_not_write_project_success(self):
         with self.app.app_context():
